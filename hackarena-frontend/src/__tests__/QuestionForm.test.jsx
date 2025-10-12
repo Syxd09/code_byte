@@ -18,6 +18,9 @@ describe('QuestionForm Component', () => {
     render(<QuestionForm onSave={mockOnSave} onCancel={mockOnCancel} />);
 
     expect(screen.getByText('Add New Question')).toBeInTheDocument();
+    expect(screen.getByText('Basic Info')).toBeInTheDocument();
+    expect(screen.getByText('Question Content')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.getByLabelText(/Question Text/)).toBeInTheDocument();
     expect(screen.getByDisplayValue('mcq')).toBeInTheDocument();
     expect(screen.getByDisplayValue('medium')).toBeInTheDocument();
@@ -63,6 +66,10 @@ describe('QuestionForm Component', () => {
     const user = userEvent.setup();
     render(<QuestionForm onSave={mockOnSave} onCancel={mockOnCancel} />);
 
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
+
     // Form should show options for MCQ
     expect(screen.getByText('Options')).toBeInTheDocument();
 
@@ -97,19 +104,23 @@ describe('QuestionForm Component', () => {
     const typeSelect = screen.getByDisplayValue('mcq');
     await user.selectOptions(typeSelect, 'code');
 
-    // Should show evaluation mode
-    expect(screen.getByText('Evaluation Mode')).toBeInTheDocument();
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
 
-    // Change to textarea mode
-    const evalSelect = screen.getByDisplayValue('MCQ Mode (Auto-check against key)');
-    await user.selectOptions(evalSelect, 'textarea');
+    // Should show code question variant
+    expect(screen.getByText('Code Question Variant')).toBeInTheDocument();
 
-    // Should show AI validation settings
-    expect(screen.getByText('AI Validation Settings (Optional)')).toBeInTheDocument();
+    // Change to IDE Mode
+    const evalSelect = screen.getByDisplayValue('Code Snippet MCQ (Multiple choice with code options)');
+    await user.selectOptions(evalSelect, 'ide');
+
+    // Should show IDE template
+    expect(screen.getByText('IDE Template (Optional starter code)')).toBeInTheDocument();
 
     // Fill required fields
     const questionInput = screen.getByLabelText(/Question Text/);
-    const correctAnswerTextarea = screen.getByPlaceholderText(/Enter the expected code solution/);
+    const correctAnswerTextarea = screen.getByPlaceholderText(/Enter the expected complete solution/);
 
     await user.type(questionInput, 'Write a function to reverse a string');
     await user.type(correctAnswerTextarea, 'function reverse(str) { return str.split("").reverse().join(""); }');
@@ -121,7 +132,7 @@ describe('QuestionForm Component', () => {
       expect.objectContaining({
         questionText: 'Write a function to reverse a string',
         questionType: 'code',
-        evaluationMode: 'textarea',
+        evaluationMode: 'ide',
         correctAnswer: 'function reverse(str) { return str.split("").reverse().join(""); }'
       })
     );
@@ -135,9 +146,9 @@ describe('QuestionForm Component', () => {
     const typeSelect = screen.getByDisplayValue('mcq');
     await user.selectOptions(typeSelect, 'code');
 
-    // Change to compiler mode
-    const evalSelect = screen.getByDisplayValue('MCQ Mode (Auto-check against key)');
-    await user.selectOptions(evalSelect, 'compiler');
+    // Switch to Settings tab
+    const settingsTab = screen.getByText('Settings');
+    await user.click(settingsTab);
 
     // Should show test cases field
     expect(screen.getByText('Test Cases (JSON format)')).toBeInTheDocument();
@@ -158,7 +169,7 @@ describe('QuestionForm Component', () => {
       expect.objectContaining({
         questionText: 'Write a function to add two numbers',
         questionType: 'code',
-        evaluationMode: 'compiler',
+        evaluationMode: 'mcq', // Default mode
         testCases: '[{"input": "2 3", "expected": "5"}, {"input": "10 20", "expected": "30"}]'
       })
     );
@@ -171,6 +182,10 @@ describe('QuestionForm Component', () => {
     // Change to crossword type
     const typeSelect = screen.getByDisplayValue('mcq');
     await user.selectOptions(typeSelect, 'crossword');
+
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
 
     // Should show crossword configuration
     expect(screen.getByText('Crossword Configuration')).toBeInTheDocument();
@@ -204,6 +219,10 @@ describe('QuestionForm Component', () => {
     const typeSelect = screen.getByDisplayValue('mcq');
     await user.selectOptions(typeSelect, 'image');
 
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
+
     // Should show image upload
     expect(screen.getByText('Question Image')).toBeInTheDocument();
 
@@ -226,6 +245,10 @@ describe('QuestionForm Component', () => {
   it('adds and removes options for MCQ', async () => {
     const user = userEvent.setup();
     render(<QuestionForm onSave={mockOnSave} onCancel={mockOnCancel} />);
+
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
 
     // Should start with 4 options
     let optionInputs = screen.getAllByPlaceholderText(/Option [A-D]/);

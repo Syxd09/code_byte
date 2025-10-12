@@ -290,43 +290,66 @@ router.post('/join', async (req, res) => {
 router.post('/rejoin', authenticateParticipant, async (req, res) => {
   try {
     const participant = req.participant;
-    
+
+    console.log('🔄 Rejoin request for participant:', participant.id, 'game:', participant.game_id);
+
     const game = await db.getAsync(
       'SELECT * FROM games WHERE id = ?',
       [participant.game_id]
     );
 
     if (!game) {
+      console.log('❌ Game not found for rejoin:', participant.game_id);
       return res.status(404).json({ error: 'Game not found' });
     }
 
+    console.log('📊 Game status during rejoin:', game.status);
+
     // Get current game state
     let currentQuestion = null;
+    let answersRevealed = false;
     if (game.status === 'active') {
       const session = await db.getAsync(
-        `SELECT gs.*, q.* FROM game_sessions gs 
+        `SELECT gs.*, q.* FROM game_sessions gs
          JOIN questions q ON gs.current_question_id = q.id
          WHERE gs.game_id = ?`,
         [game.id]
       );
 
-      if (session && !session.answers_revealed) {
+      console.log('🎯 Game session found:', !!session);
+      if (session) {
+        answersRevealed = session.answers_revealed;
+        console.log('🔍 Answers revealed status:', answersRevealed);
+
+        // Always send current question for active games, regardless of reveal status
         // Check if participant already answered this question
         const existingAnswer = await db.getAsync(
           'SELECT * FROM answers WHERE participant_id = ? AND question_id = ?',
           [participant.id, session.current_question_id]
         );
 
-        if (!existingAnswer) {
+        console.log('📝 Participant already answered:', !!existingAnswer);
+
+        // CRITICAL FIX: Always send current question for active games to ensure participants
+        // who rejoin during an active question immediately receive it, regardless of answer status
+        // Only skip if answers are revealed AND participant has already answered
+        if (!answersRevealed || !existingAnswer) {
+          console.log('✅ Sending current question to participant (rejoin during active game)');
           currentQuestion = {
             ...session,
             options: JSON.parse(session.options || '[]')
           };
+        } else {
+          console.log('⏳ Answers revealed and participant already answered, not resending question');
         }
+      } else {
+        console.log('❌ No active session found for game:', game.id);
       }
+    } else {
+      console.log('⏸️ Game not active, status:', game.status);
     }
 
-    res.json({
+    const responseData = {
       participant: {
         id: participant.id,
         name: participant.name,
@@ -339,9 +362,18 @@ router.post('/rejoin', authenticateParticipant, async (req, res) => {
       },
       currentQuestion,
       gameCode: game.game_code
+    };
+
+    console.log('📤 Rejoin response data:', {
+      gameStatus: game.status,
+      hasCurrentQuestion: !!currentQuestion,
+      answersRevealed,
+      participantId: participant.id
     });
+
+    res.json(responseData);
   } catch (error) {
-    console.error('Rejoin game error:', error);
+    console.error('❌ Rejoin game error:', error);
     res.status(500).json({ error: 'Failed to rejoin game' });
   }
 });

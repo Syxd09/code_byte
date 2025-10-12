@@ -14,6 +14,13 @@ import {
   BarChart3,
   Pause
 } from 'lucide-react'
+import Editor from 'react-simple-code-editor'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-clike'
+import 'prismjs/components/prism-javascript'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-java'
+import 'prismjs/themes/prism.css'
 import socketManager from '../../utils/socket'
 import CheatDetectionManager from '../../utils/cheatDetection'
 import { api } from '../../utils/api'
@@ -140,19 +147,38 @@ const GameInterface = () => {
       const { participant: updatedParticipant, currentQuestion: activeQuestion } = response.data
       setParticipant(updatedParticipant)
 
+      console.log('🎮 Game status from rejoin:', updatedParticipant.gameStatus)
+
       if (activeQuestion) {
         console.log('❓ Active question found during rejoin:', activeQuestion)
         setCurrentQuestion(activeQuestion)
         setGameState('active')
-        const calculatedTimeLeft = Math.max(0, Math.floor((new Date(activeQuestion.question_ends_at) - new Date()) / 1000))
-        console.log('⏱️ Rejoin - Question ends at:', activeQuestion.question_ends_at)
-        console.log('⏱️ Rejoin - Current time:', new Date().toISOString())
-        console.log('⏱️ Rejoin - Calculated time left:', calculatedTimeLeft)
-        setTimeLeft(calculatedTimeLeft)
+
+        // Check if answers are revealed
+        const answersRevealed = activeQuestion.answers_revealed
+        console.log('🔍 Answers revealed status:', answersRevealed)
+
+        if (answersRevealed) {
+          // If answers are revealed, show the answer immediately
+          console.log('✅ Answers revealed, showing correct answer')
+          setShowAnswer(true)
+          setSubmitted(true) // Mark as submitted since answer is revealed
+        } else {
+          // Calculate time left only if answers not revealed
+          const calculatedTimeLeft = Math.max(0, Math.floor((new Date(activeQuestion.question_ends_at) - new Date()) / 1000))
+          console.log('⏱️ Rejoin - Question ends at:', activeQuestion.question_ends_at)
+          console.log('⏱️ Rejoin - Current time:', new Date().toISOString())
+          console.log('⏱️ Rejoin - Calculated time left:', calculatedTimeLeft)
+          setTimeLeft(calculatedTimeLeft)
+        }
       } else if (updatedParticipant.gameStatus === 'completed') {
         console.log('🏁 Game already completed during rejoin')
         setGameState('ended')
         fetchAnalytics()
+      } else if (updatedParticipant.gameStatus === 'active') {
+        console.log('⚠️ Game is active but no current question received - this might be the issue!')
+        // Game is active but no question sent - participant should receive current question
+        console.log('🔄 Game active but no question - staying in waiting state, expecting gameStarted event')
       } else {
         console.log('⏳ No active question during rejoin, staying in waiting state')
       }
@@ -405,6 +431,22 @@ const GameInterface = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const validateLanguage = (lang) => {
+    const validLanguages = ['javascript', 'python', 'java', 'cpp']
+    return validLanguages.includes(lang) ? lang : 'javascript'
+  }
+
+  const getLanguageHighlight = (lang = 'javascript') => {
+    const validLang = validateLanguage(lang)
+    switch (validLang) {
+      case 'javascript': return Prism.languages.javascript
+      case 'python': return Prism.languages.python
+      case 'java': return Prism.languages.java
+      case 'cpp': return Prism.languages.cpp
+      default: return Prism.languages.javascript
+    }
+  }
+
   const renderQuestionInput = () => {
     if (!currentQuestion) return null
 
@@ -492,23 +534,230 @@ const GameInterface = () => {
 
       case 'code':
         const evaluationMode = currentQuestion.evaluation_mode || 'mcq';
+        const codeLanguage = currentQuestion.code_language || 'javascript';
         let placeholder = "Write your code here...";
 
         if (evaluationMode === 'textarea') {
           placeholder = "Write your code solution. AI will evaluate semantic correctness...";
         } else if (evaluationMode === 'compiler') {
           placeholder = "Write your code. It will be tested against provided test cases...";
+        } else if (evaluationMode === 'ide') {
+          placeholder = "Write your complete solution...";
+        } else if (evaluationMode === 'bugfix') {
+          placeholder = "Fix the buggy code above...";
         } else {
           placeholder = "Write your code here...";
         }
 
+        // Display code snippet for MCQ mode
+        if (evaluationMode === 'mcq' && currentQuestion.code_snippet) {
+          return (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Code Snippet ({codeLanguage}):
+                </label>
+                <div className="bg-gray-100 p-4 rounded-lg border">
+                  <Editor
+                    value={currentQuestion.code_snippet}
+                    readOnly={true}
+                    highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                    padding={15}
+                    style={{
+                      fontFamily: '"Inconsolata", "Monaco", monospace',
+                      fontSize: 14,
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      minHeight: '120px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Answer Options:
+                </label>
+                <div className="space-y-3">
+                  {(() => {
+                    let options = []
+                    if (Array.isArray(currentQuestion.options)) {
+                      options = currentQuestion.options
+                    } else if (typeof currentQuestion.options === 'string') {
+                      try {
+                        options = JSON.parse(currentQuestion.options || '[]')
+                        if (!Array.isArray(options)) {
+                          options = []
+                        }
+                      } catch (error) {
+                        console.error('Invalid options JSON for code MCQ question:', currentQuestion.options, error)
+                        options = []
+                      }
+                    }
+                    return options.map((option, index) => (
+                      <label key={index} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="code-mcq-answer"
+                          value={option}
+                          checked={answer === option}
+                          onChange={(e) => setAnswer(e.target.value)}
+                          disabled={submitted}
+                          className="w-4 h-4 text-primary-600"
+                        />
+                        <span className="font-medium text-gray-700">
+                          {String.fromCharCode(65 + index)}.
+                        </span>
+                        <div className="flex-1">
+                          <Editor
+                            value={option}
+                            readOnly={true}
+                            highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                            padding={10}
+                            style={{
+                              fontFamily: '"Inconsolata", "Monaco", monospace',
+                              fontSize: 12,
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              minHeight: '60px'
+                            }}
+                          />
+                        </div>
+                      </label>
+                    ))
+                  })()}
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        // Display buggy code for bugfix mode
+        if (evaluationMode === 'bugfix' && currentQuestion.bug_fix_code) {
+          return (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Buggy Code ({codeLanguage}):
+                </label>
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <Editor
+                    value={currentQuestion.bug_fix_code}
+                    readOnly={true}
+                    highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                    padding={15}
+                    style={{
+                      fontFamily: '"Inconsolata", "Monaco", monospace',
+                      fontSize: 14,
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      minHeight: '150px'
+                    }}
+                  />
+                </div>
+                {currentQuestion.bug_fix_instructions && (
+                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Instructions:</strong> {currentQuestion.bug_fix_instructions}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Your Fixed Code:
+                </label>
+                <Editor
+                  value={answer}
+                  onValueChange={(code) => setAnswer(code)}
+                  highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                  padding={15}
+                  disabled={submitted}
+                  style={{
+                    fontFamily: '"Inconsolata", "Monaco", monospace',
+                    fontSize: 14,
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    minHeight: '200px'
+                  }}
+                  placeholder={placeholder}
+                />
+              </div>
+            </div>
+          )
+        }
+
+        // IDE mode with optional template
+        if (evaluationMode === 'ide') {
+          return (
+            <div className="space-y-4">
+              {currentQuestion.ide_template && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Starter Template ({codeLanguage}):
+                  </label>
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <Editor
+                      value={currentQuestion.ide_template}
+                      readOnly={true}
+                      highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                      padding={15}
+                      style={{
+                        fontFamily: '"Inconsolata", "Monaco", monospace',
+                        fontSize: 14,
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        minHeight: '120px'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Your Solution ({codeLanguage}):
+                </label>
+                <Editor
+                  value={answer}
+                  onValueChange={(code) => setAnswer(code)}
+                  highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+                  padding={15}
+                  disabled={submitted}
+                  style={{
+                    fontFamily: '"Inconsolata", "Monaco", monospace',
+                    fontSize: 14,
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    minHeight: '250px'
+                  }}
+                  placeholder={placeholder}
+                />
+              </div>
+            </div>
+          )
+        }
+
+        // Default code editor for other modes
         return (
           <div>
-            <textarea
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Code Solution ({codeLanguage}):
+            </label>
+            <Editor
               value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
+              onValueChange={(code) => setAnswer(code)}
+              highlight={(code) => Prism.highlight(code, getLanguageHighlight(codeLanguage))}
+              padding={15}
               disabled={submitted}
-              className="input w-full h-32 font-mono text-sm resize-none"
+              style={{
+                fontFamily: '"Inconsolata", "Monaco", monospace',
+                fontSize: 14,
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                minHeight: '200px'
+              }}
               placeholder={placeholder}
             />
             {evaluationMode === 'textarea' && (
