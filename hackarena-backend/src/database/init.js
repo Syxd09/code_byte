@@ -6,7 +6,22 @@ const db = new sqlite3.Database(process.env.DATABASE_URL || './database/hackaren
 // Promisify database methods
 db.getAsync = promisify(db.get.bind(db));
 db.allAsync = promisify(db.all.bind(db));
-db.runAsync = promisify(db.run.bind(db));
+
+// Custom runAsync using promisify for proper error handling
+const runAsync = promisify((sql, params, callback) => {
+  if (typeof params === 'function') {
+    callback = params;
+    params = [];
+  }
+  db.run(sql, params, function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { lastID: this.lastID, changes: this.changes });
+    }
+  });
+});
+db.runAsync = runAsync;
 
 export async function initializeDatabase() {
   try {
@@ -34,6 +49,8 @@ export async function initializeDatabase() {
         current_question_index INTEGER DEFAULT 0,
         total_questions INTEGER DEFAULT 0,
         max_participants INTEGER DEFAULT 500,
+        qualification_type TEXT DEFAULT 'none',
+        qualification_threshold INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         started_at DATETIME,
         ended_at DATETIME,
@@ -57,10 +74,105 @@ export async function initializeDatabase() {
         marks INTEGER DEFAULT 10,
         difficulty TEXT DEFAULT 'medium',
         explanation TEXT,
+        evaluation_mode TEXT DEFAULT 'mcq',
+        test_cases TEXT,
+        ai_validation_settings TEXT,
+        image_url TEXT,
+        crossword_grid TEXT,
+        crossword_clues TEXT,
+        crossword_size TEXT,
+        partial_marking_settings TEXT,
+        time_decay_enabled BOOLEAN DEFAULT FALSE,
+        time_decay_factor DECIMAL(3,2) DEFAULT 0.1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (game_id) REFERENCES games (id)
       )
     `);
+
+    // Add new columns to existing questions table if they don't exist
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN evaluation_mode TEXT DEFAULT 'mcq'`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN test_cases TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN ai_validation_settings TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN image_url TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN crossword_grid TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN crossword_clues TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN crossword_size TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN partial_marking_settings TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN time_decay_enabled BOOLEAN DEFAULT FALSE`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN time_decay_factor DECIMAL(3,2) DEFAULT 0.1`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE game_sessions ADD COLUMN paused_at DATETIME`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE games ADD COLUMN qualification_type TEXT DEFAULT 'none'`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE games ADD COLUMN qualification_threshold INTEGER DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE participants ADD COLUMN qualified BOOLEAN DEFAULT FALSE`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
 
     // Participants table
     await db.runAsync(`
@@ -72,6 +184,7 @@ export async function initializeDatabase() {
         total_score INTEGER DEFAULT 0,
         current_rank INTEGER DEFAULT 0,
         status TEXT DEFAULT 'active',
+        qualified BOOLEAN DEFAULT FALSE,
         cheat_warnings INTEGER DEFAULT 0,
         joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         socket_id TEXT,
@@ -105,6 +218,7 @@ export async function initializeDatabase() {
         current_question_id INTEGER,
         question_started_at DATETIME,
         question_ends_at DATETIME,
+        paused_at DATETIME,
         answers_revealed BOOLEAN DEFAULT FALSE,
         total_participants INTEGER DEFAULT 0,
         answered_participants INTEGER DEFAULT 0,

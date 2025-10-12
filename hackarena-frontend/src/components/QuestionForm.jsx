@@ -12,7 +12,14 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
     timeLimit: 60,
     marks: 10,
     difficulty: 'medium',
-    explanation: ''
+    explanation: '',
+    evaluationMode: 'mcq',
+    testCases: '',
+    aiValidationSettings: '',
+    imageUrl: '',
+    crosswordGrid: [],
+    crosswordClues: {},
+    crosswordSize: { rows: 10, cols: 10 }
   })
 
   useEffect(() => {
@@ -27,20 +34,27 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
         timeLimit: question.time_limit || 60,
         marks: question.marks || 10,
         difficulty: question.difficulty || 'medium',
-        explanation: question.explanation || ''
+        explanation: question.explanation || '',
+        evaluationMode: question.evaluation_mode || 'mcq',
+        testCases: question.test_cases || '',
+        aiValidationSettings: question.ai_validation_settings || '',
+        imageUrl: question.image_url || '',
+        crosswordGrid: question.crossword_grid ? JSON.parse(question.crossword_grid) : [],
+        crosswordClues: question.crossword_clues ? JSON.parse(question.crossword_clues) : {},
+        crosswordSize: question.crossword_size ? JSON.parse(question.crossword_size) : { rows: 10, cols: 10 }
       })
     }
   }, [question])
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    
+
     // Validation
     if (!formData.questionText.trim()) {
       alert('Question text is required')
       return
     }
-    
+
     if (!formData.correctAnswer.trim()) {
       alert('Correct answer is required')
       return
@@ -49,6 +63,27 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
     if (formData.questionType === 'mcq' && formData.options.filter(opt => opt.trim()).length < 2) {
       alert('At least 2 options are required for MCQ')
       return
+    }
+
+    if (formData.questionType === 'code' && formData.evaluationMode === 'compiler' && !formData.testCases.trim()) {
+      alert('Test cases are required for code questions with compiler evaluation')
+      return
+    }
+
+    if (formData.questionType === 'image' && !formData.imageUrl) {
+      alert('Please upload an image for image-based questions')
+      return
+    }
+
+    if (formData.questionType === 'crossword') {
+      if (!formData.crosswordGrid || formData.crosswordGrid.length === 0) {
+        alert('Crossword grid is required')
+        return
+      }
+      if (!formData.crosswordClues || Object.keys(formData.crosswordClues).length === 0) {
+        alert('Crossword clues are required')
+        return
+      }
     }
 
     onSave(formData)
@@ -116,6 +151,8 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                 <option value="code">Code Snippet</option>
                 <option value="truefalse">True/False</option>
                 <option value="short">Short Answer</option>
+                <option value="image">Image-based</option>
+                <option value="crossword">Crossword Puzzle</option>
               </select>
             </div>
 
@@ -134,6 +171,23 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
               </select>
             </div>
           </div>
+
+          {formData.questionType === 'code' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Evaluation Mode
+              </label>
+              <select
+                value={formData.evaluationMode}
+                onChange={(e) => setFormData(prev => ({ ...prev, evaluationMode: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="mcq">MCQ Mode (Auto-check against key)</option>
+                <option value="textarea">Text Area Mode (AI-based semantic validation)</option>
+                <option value="compiler">Compiler Mode (Test case validation)</option>
+              </select>
+            </div>
+          )}
 
           {formData.questionType === 'mcq' && (
             <div>
@@ -180,15 +234,236 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Correct Answer *
             </label>
-            <input
-              type="text"
-              value={formData.correctAnswer}
-              onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
-              className="input w-full"
-              placeholder="Enter the correct answer..."
-              required
-            />
+            {formData.questionType === 'code' && formData.evaluationMode === 'textarea' ? (
+              <textarea
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full h-24 resize-none font-mono text-sm"
+                placeholder="Enter the expected code solution..."
+                required
+              />
+            ) : formData.questionType === 'mcq' ? (
+              <select
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full"
+                required
+              >
+                <option value="">Select correct option</option>
+                {formData.options.map((option, index) => (
+                  option.trim() && (
+                    <option key={index} value={option}>
+                      {String.fromCharCode(65 + index)}. {option}
+                    </option>
+                  )
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full"
+                placeholder="Enter the correct answer..."
+                required
+              />
+            )}
           </div>
+
+          {formData.questionType === 'code' && formData.evaluationMode === 'compiler' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Test Cases (JSON format)
+              </label>
+              <textarea
+                value={formData.testCases}
+                onChange={(e) => setFormData(prev => ({ ...prev, testCases: e.target.value }))}
+                className="input w-full h-32 font-mono text-sm resize-none"
+                placeholder='[{"input": "2 3", "expected": "5"}, {"input": "10 20", "expected": "30"}]'
+              />
+            </div>
+          )}
+
+          {formData.questionType === 'code' && formData.evaluationMode === 'textarea' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                AI Validation Settings (Optional)
+              </label>
+              <textarea
+                value={formData.aiValidationSettings}
+                onChange={(e) => setFormData(prev => ({ ...prev, aiValidationSettings: e.target.value }))}
+                className="input w-full h-20 resize-none"
+                placeholder="Additional validation rules or settings..."
+              />
+            </div>
+          )}
+
+          {formData.questionType === 'image' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Question Image
+              </label>
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const formDataUpload = new FormData();
+                      formDataUpload.append('image', file);
+
+                      try {
+                        const response = await fetch('/api/games/upload-image', {
+                          method: 'POST',
+                          body: formDataUpload,
+                          headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('hackarena_token')}`
+                          }
+                        });
+                        const data = await response.json();
+                        setFormData(prev => ({ ...prev, imageUrl: data.imageUrl }));
+                      } catch (error) {
+                        console.error('Upload failed:', error);
+                        alert('Failed to upload image');
+                      }
+                    }
+                  }}
+                  className="input w-full"
+                />
+                {formData.imageUrl && (
+                  <div className="mt-2">
+                    <img
+                      src={`http://localhost:3001${formData.imageUrl}`}
+                      alt="Question"
+                      className="max-w-full h-48 object-contain border rounded"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {formData.questionType === 'crossword' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Crossword Configuration
+              </label>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Rows</label>
+                    <input
+                      type="number"
+                      value={formData.crosswordSize.rows}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        crosswordSize: { ...prev.crosswordSize, rows: parseInt(e.target.value) || 10 }
+                      }))}
+                      className="input w-full"
+                      min="5"
+                      max="20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Columns</label>
+                    <input
+                      type="number"
+                      value={formData.crosswordSize.cols}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        crosswordSize: { ...prev.crosswordSize, cols: parseInt(e.target.value) || 10 }
+                      }))}
+                      className="input w-full"
+                      min="5"
+                      max="20"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">Clues (JSON format)</label>
+                  <textarea
+                    value={JSON.stringify(formData.crosswordClues, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        const clues = JSON.parse(e.target.value);
+                        setFormData(prev => ({ ...prev, crosswordClues: clues }));
+                      } catch (error) {
+                        // Invalid JSON, keep current value
+                      }
+                    }}
+                    className="input w-full h-32 font-mono text-sm"
+                    placeholder='{"1A": {"word": "EXAMPLE", "clue": "Sample word"}, "1D": {"word": "TEST", "clue": "Trial run"}}'
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">Grid Layout (JSON format)</label>
+                  <textarea
+                    value={JSON.stringify(formData.crosswordGrid, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        const grid = JSON.parse(e.target.value);
+                        setFormData(prev => ({ ...prev, crosswordGrid: grid }));
+                      } catch (error) {
+                        // Invalid JSON, keep current value
+                      }
+                    }}
+                    className="input w-full h-32 font-mono text-sm"
+                    placeholder='[["#", "1A", "2A", "#"], ["1D", "#", "#", "2D"]]'
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {formData.questionType === 'truefalse' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Correct Answer
+              </label>
+              <select
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="">Select answer</option>
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            </div>
+          )}
+
+          {formData.questionType === 'short' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Correct Answer (Short Answer)
+              </label>
+              <input
+                type="text"
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full"
+                placeholder="Enter the expected short answer..."
+              />
+            </div>
+          )}
+
+          {formData.questionType === 'fill' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Correct Answer (Fill in the Blank)
+              </label>
+              <input
+                type="text"
+                value={formData.correctAnswer}
+                onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                className="input w-full"
+                placeholder="Enter the word/phrase to fill in the blank..."
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             <div>

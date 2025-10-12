@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trophy, Mail, Lock, LogIn } from 'lucide-react'
@@ -11,7 +11,7 @@ const Login = () => {
   })
   const [loading, setLoading] = useState(false)
   
-  const { login } = useAuth()
+  const { login, googleLogin } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -40,6 +40,35 @@ const Login = () => {
       [e.target.name]: e.target.value
     }))
   }
+
+  const handleGoogleLogin = async (response) => {
+    try {
+      const result = await googleLogin(response.credential)
+
+      if (result.success) {
+        toast.success('Login successful!')
+        navigate('/dashboard')
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      toast.error('Google authentication failed')
+    }
+  }
+
+  useEffect(() => {
+    if (window.google) {
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        callback: handleGoogleLogin
+      })
+
+      window.google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        { theme: 'outline', size: 'large' }
+      )
+    }
+  }, [])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -114,6 +143,23 @@ const Login = () => {
             </button>
           </form>
 
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <div id="google-signin-button" className="flex justify-center"></div>
+            </div>
+          </div>
+        </div>
+
+        <>
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
@@ -128,7 +174,7 @@ const Login = () => {
               ← Back to home
             </Link>
           </div>
-        </div>
+        </>
       </div>
     </div>
   )

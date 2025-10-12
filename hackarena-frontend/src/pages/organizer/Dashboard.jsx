@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { 
-  Plus, 
-  Users, 
-  Play, 
-  Pause, 
-  BarChart3, 
-  Settings, 
+import {
+  Plus,
+  Users,
+  Play,
+  Pause,
+  BarChart3,
+  Settings,
   Trophy,
   LogOut,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  TrendingUp,
+  Download
 } from 'lucide-react'
 import { api } from '../../utils/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -25,7 +27,9 @@ const Dashboard = () => {
   const [newGame, setNewGame] = useState({
     title: '',
     description: '',
-    maxParticipants: 500
+    maxParticipants: 500,
+    qualificationType: 'none',
+    qualificationThreshold: 0
   })
   
   const { user, logout } = useAuth()
@@ -59,7 +63,7 @@ const Dashboard = () => {
       const response = await api.post('/games', newGame)
       setGames([response.data, ...games])
       setShowCreateModal(false)
-      setNewGame({ title: '', description: '', maxParticipants: 500 })
+      setNewGame({ title: '', description: '', maxParticipants: 500, qualificationType: 'none', qualificationThreshold: 0 })
       toast.success('Game created successfully!')
     } catch (error) {
       console.error('Failed to create game:', error)
@@ -77,6 +81,29 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Failed to delete game:', error)
       toast.error('Failed to delete game')
+    }
+  }
+
+  const handleExport = async (gameId, gameTitle, format) => {
+    try {
+      const response = await api.get(`/analytics/games/${gameId}/export/${format}`, {
+        responseType: 'blob'
+      })
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${gameTitle.replace(/[^a-zA-Z0-9]/g, '_')}_results.${format}`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+
+      toast.success(`Exported as ${format.toUpperCase()}`)
+    } catch (error) {
+      console.error(`Failed to export ${format}:`, error)
+      toast.error(`Failed to export as ${format.toUpperCase()}`)
     }
   }
 
@@ -253,6 +280,32 @@ const Dashboard = () => {
                     <Settings className="h-4 w-4 mr-1" />
                     Control
                   </Link>
+                  {game.status === 'completed' && (
+                    <>
+                      <Link
+                        to={`/game-analytics/${game.id}`}
+                        className="btn btn-secondary"
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                      </Link>
+                      <div className="flex space-x-1">
+                        <button
+                          onClick={() => handleExport(game.id, game.title, 'csv')}
+                          className="btn btn-secondary p-2"
+                          title="Export as CSV"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleExport(game.id, game.title, 'pdf')}
+                          className="btn btn-secondary p-2"
+                          title="Export as PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                   <Link
                     to={`/leaderboard/${game.game_code}`}
                     className="btn btn-secondary"
@@ -317,6 +370,45 @@ const Dashboard = () => {
                   max="1000"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Qualification Type
+                </label>
+                <select
+                  value={newGame.qualificationType}
+                  onChange={(e) => setNewGame(prev => ({ ...prev, qualificationType: e.target.value }))}
+                  className="input w-full"
+                >
+                  <option value="none">No Qualification</option>
+                  <option value="top_n">Top N Participants</option>
+                  <option value="top_percentage">Top X% of Participants</option>
+                  <option value="custom_threshold">Custom Score Threshold</option>
+                </select>
+              </div>
+
+              {newGame.qualificationType !== 'none' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {newGame.qualificationType === 'top_n' && 'Number of Qualifiers'}
+                    {newGame.qualificationType === 'top_percentage' && 'Percentage (%)'}
+                    {newGame.qualificationType === 'custom_threshold' && 'Minimum Score'}
+                  </label>
+                  <input
+                    type="number"
+                    value={newGame.qualificationThreshold}
+                    onChange={(e) => setNewGame(prev => ({ ...prev, qualificationThreshold: parseInt(e.target.value) || 0 }))}
+                    className="input w-full"
+                    min="0"
+                    max={newGame.qualificationType === 'top_percentage' ? 100 : undefined}
+                    placeholder={
+                      newGame.qualificationType === 'top_n' ? 'e.g., 10' :
+                      newGame.qualificationType === 'top_percentage' ? 'e.g., 25' :
+                      'e.g., 50'
+                    }
+                  />
+                </div>
+              )}
 
               <div className="flex space-x-3 pt-4">
                 <button type="submit" className="btn btn-primary flex-1">

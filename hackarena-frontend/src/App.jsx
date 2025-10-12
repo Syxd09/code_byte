@@ -8,10 +8,12 @@ import Register from './pages/auth/Register'
 // Organizer Pages
 import Dashboard from './pages/organizer/Dashboard'
 import GameControl from './pages/organizer/GameControl'
+import GameAnalytics from './pages/organizer/GameAnalytics'
 
 // Participant Pages
 import JoinGame from './pages/participant/JoinGame'
 import GameInterface from './pages/participant/GameInterface'
+import PostGameAnalytics from './pages/participant/PostGameAnalytics'
 
 // Public Pages
 import PublicLeaderboard from './pages/public/PublicLeaderboard'
@@ -37,6 +39,7 @@ function App() {
       {/* Participant Routes */}
       <Route path="/join/:gameCode?" element={<JoinGame />} />
       <Route path="/game/:gameCode" element={<GameInterface />} />
+      <Route path="/analytics" element={<PostGameAnalytics />} />
       
       {/* Public Leaderboard */}
       <Route path="/leaderboard/:gameCode" element={<PublicLeaderboard />} />
@@ -46,9 +49,13 @@ function App() {
         path="/dashboard" 
         element={user ? <Dashboard /> : <Navigate to="/login" />} 
       />
-      <Route 
-        path="/game-control/:gameId" 
-        element={user ? <GameControl /> : <Navigate to="/login" />} 
+      <Route
+        path="/game-control/:gameId"
+        element={user ? <GameControl /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/game-analytics/:gameId"
+        element={user ? <GameAnalytics /> : <Navigate to="/login" />}
       />
       
       {/* Fallback */}

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { 
-  Users, 
-  Play, 
-  Pause, 
-  Square, 
-  SkipForward, 
-  Eye, 
+import {
+  Users,
+  Play,
+  Pause,
+  Square,
+  SkipForward,
+  Eye,
   EyeOff,
   Plus,
   Edit,
@@ -17,13 +17,15 @@ import {
   Trophy,
   Clock,
   Target,
-  BarChart3
+  BarChart3,
+  TrendingUp
 } from 'lucide-react'
 import { api } from '../../utils/api'
 import socketManager from '../../utils/socket'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import GameCodeDisplay from '../../components/GameCodeDisplay'
 import QuestionForm from '../../components/QuestionForm'
+import AnalyticsCharts from '../../components/AnalyticsCharts'
 import toast from 'react-hot-toast'
 
 const GameControl = () => {
@@ -37,7 +39,10 @@ const GameControl = () => {
     answeredCount: 0,
     currentQuestionStats: null
   })
+  const [analytics, setAnalytics] = useState(null)
   const [socket, setSocket] = useState(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const [eliminatedParticipants, setEliminatedParticipants] = useState([])
 
   useEffect(() => {
     fetchGameDetails()
@@ -91,10 +96,25 @@ const GameControl = () => {
     try {
       const response = await api.get(`/games/${gameId}`)
       setGame(response.data)
+      setIsPaused(response.data.status === 'paused')
       setLiveStats(prev => ({
         ...prev,
         connectedParticipants: response.data.participants?.length || 0
       }))
+
+      // Separate eliminated participants
+      const eliminated = response.data.participants?.filter(p => p.status === 'eliminated') || []
+      setEliminatedParticipants(eliminated)
+
+      // Fetch analytics if game is completed
+      if (response.data.status === 'completed') {
+        try {
+          const analyticsResponse = await api.get(`/analytics/games/${gameId}/overview`)
+          setAnalytics(analyticsResponse.data)
+        } catch (analyticsError) {
+          console.error('Failed to fetch analytics:', analyticsError)
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch game details:', error)
       toast.error('Failed to load game details')
@@ -155,6 +175,30 @@ const GameControl = () => {
     }
   }
 
+  const pauseGame = async () => {
+    try {
+      await api.post(`/games/${gameId}/pause`)
+      toast.success('Game paused successfully!')
+      setIsPaused(true)
+      fetchGameDetails()
+    } catch (error) {
+      console.error('Failed to pause game:', error)
+      toast.error('Failed to pause game')
+    }
+  }
+
+  const resumeGame = async () => {
+    try {
+      await api.post(`/games/${gameId}/resume`)
+      toast.success('Game resumed successfully!')
+      setIsPaused(false)
+      fetchGameDetails()
+    } catch (error) {
+      console.error('Failed to resume game:', error)
+      toast.error('Failed to resume game')
+    }
+  }
+
   const saveQuestion = async (questionData) => {
     try {
       if (editingQuestion) {
@@ -205,16 +249,29 @@ const GameControl = () => {
     if (penalty === null) return
 
     try {
-      socket?.emit('warnParticipant', { 
-        participantId, 
-        gameId, 
-        customPenalty: parseInt(penalty) || 5 
+      socket?.emit('warnParticipant', {
+        participantId,
+        gameId,
+        customPenalty: parseInt(penalty) || 5
       })
       toast.success('Warning sent to participant')
       fetchGameDetails()
     } catch (error) {
       console.error('Failed to warn participant:', error)
       toast.error('Failed to warn participant')
+    }
+  }
+
+  const reAdmitParticipant = async (participantId) => {
+    if (!confirm('Are you sure you want to re-admit this participant?')) return
+
+    try {
+      socket?.emit('reAdmitParticipant', { participantId, gameId })
+      toast.success('Participant re-admitted successfully')
+      fetchGameDetails()
+    } catch (error) {
+      console.error('Failed to re-admit participant:', error)
+      toast.error('Failed to re-admit participant')
     }
   }
 
@@ -241,6 +298,7 @@ const GameControl = () => {
   const currentQuestion = getCurrentQuestion()
   const activeParticipants = game.participants?.filter(p => p.status === 'active') || []
   const flaggedParticipants = game.participants?.filter(p => p.status === 'flagged') || []
+  const eliminatedParticipantsList = game.participants?.filter(p => p.status === 'eliminated') || []
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -254,8 +312,9 @@ const GameControl = () => {
               </Link>
               <h1 className="text-xl font-bold text-gray-900">{game.title}</h1>
               <span className={`px-3 py-1 text-sm rounded-full ${
-                game.status === 'active' ? 'bg-green-100 text-green-800' : 
-                game.status === 'completed' ? 'bg-blue-100 text-blue-800' : 
+                game.status === 'active' ? 'bg-green-100 text-green-800' :
+                game.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                game.status === 'completed' ? 'bg-blue-100 text-blue-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
                 {game.status}
@@ -282,6 +341,10 @@ const GameControl = () => {
                 
                 {game.status === 'active' && (
                   <>
+                    <button onClick={pauseGame} className="btn btn-secondary">
+                      <Pause className="h-4 w-4 mr-2" />
+                      Pause Game
+                    </button>
                     <button onClick={nextQuestion} className="btn btn-primary">
                       <SkipForward className="h-4 w-4 mr-2" />
                       Next Question
@@ -289,6 +352,19 @@ const GameControl = () => {
                     <button onClick={revealAnswer} className="btn btn-secondary">
                       <Eye className="h-4 w-4 mr-2" />
                       Reveal Answer
+                    </button>
+                    <button onClick={endGame} className="btn btn-danger">
+                      <Square className="h-4 w-4 mr-2" />
+                      End Game
+                    </button>
+                  </>
+                )}
+
+                {game.status === 'paused' && (
+                  <>
+                    <button onClick={resumeGame} className="btn btn-primary">
+                      <Play className="h-4 w-4 mr-2" />
+                      Resume Game
                     </button>
                     <button onClick={endGame} className="btn btn-danger">
                       <Square className="h-4 w-4 mr-2" />
@@ -503,6 +579,34 @@ const GameControl = () => {
               </div>
             )}
 
+            {/* Eliminated Participants */}
+            {eliminatedParticipantsList.length > 0 && (
+              <div className="card p-4 border-orange-200 bg-orange-50">
+                <div className="flex items-center space-x-2 mb-3">
+                  <UserX className="h-5 w-5 text-orange-600" />
+                  <h3 className="font-semibold text-orange-800">Eliminated Participants</h3>
+                </div>
+                <div className="space-y-2">
+                  {eliminatedParticipantsList.map(participant => (
+                    <div key={participant.id} className="flex items-center justify-between">
+                      <span className="text-sm">
+                        {participant.avatar} {participant.name}
+                        <span className="text-orange-600 ml-2">
+                          (Eliminated)
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => reAdmitParticipant(participant.id)}
+                        className="text-xs btn btn-primary"
+                      >
+                        Re-admit
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Live Leaderboard */}
             <div className="card p-6">
               <h3 className="text-lg font-semibold mb-4">Live Leaderboard</h3>
@@ -570,6 +674,23 @@ const GameControl = () => {
                 ))}
               </div>
             </div>
+
+            {/* Game Analytics - Only show for completed games */}
+            {game.status === 'completed' && analytics && (
+              <div className="card p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Game Analytics</h3>
+                  <Link
+                    to={`/game-analytics/${game.id}`}
+                    className="btn btn-secondary text-sm"
+                  >
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    View Full Analytics
+                  </Link>
+                </div>
+                <AnalyticsCharts data={analytics} type="overview" />
+              </div>
+            )}
           </div>
         </div>
       </div>

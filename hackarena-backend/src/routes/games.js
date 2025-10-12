@@ -1,11 +1,59 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { db } from '../database/init.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { io } from '../server.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../../uploads'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = uuidv4() + path.extname(file.originalname);
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
+
 const router = express.Router();
+
+// Upload image for questions
+router.post('/upload-image', authenticateToken, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error('Image upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
 
 // Get all games for organizer
 router.get('/', authenticateToken, async (req, res) => {
@@ -33,25 +81,29 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create new game
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, description, maxParticipants } = req.body;
+    const { title, description, maxParticipants, qualificationType, qualificationThreshold } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
 
     const gameCode = uuidv4().substr(0, 8).toUpperCase();
-    
+
     const result = await db.runAsync(
-      `INSERT INTO games (title, description, game_code, organizer_id, max_participants) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [title, description, gameCode, req.user.id, maxParticipants || 500]
+      `INSERT INTO games (title, description, game_code, organizer_id, max_participants, qualification_type, qualification_threshold)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [title, description, gameCode, req.user.id, maxParticipants || 500, qualificationType || 'none', qualificationThreshold || 0]
     );
 
     // Generate QR Code
     const joinUrl = `${process.env.FRONTEND_URL}/join/${gameCode}`;
     const qrCodeDataUrl = await QRCode.toDataURL(joinUrl);
 
-    const game = await db.getAsync('SELECT * FROM games WHERE id = ?', [result.lastID]);
+    const game = await db.getAsync('SELECT * FROM games WHERE game_code = ?', [gameCode]);
+
+    if (!game) {
+      throw new Error('Game not found after creation');
+    }
 
     res.status(201).json({
       ...game,
@@ -84,7 +136,7 @@ router.get('/:gameId', authenticateToken, async (req, res) => {
 
     // Get participants
     const participants = await db.allAsync(
-      `SELECT id, name, avatar, total_score, current_rank, status, cheat_warnings, joined_at 
+      `SELECT id, name, avatar, total_score, current_rank, status, qualified, cheat_warnings, joined_at
        FROM participants WHERE game_id = ? ORDER BY total_score DESC`,
       [game.id]
     );
@@ -109,12 +161,12 @@ router.get('/:gameId', authenticateToken, async (req, res) => {
 // Update game
 router.put('/:gameId', authenticateToken, async (req, res) => {
   try {
-    const { title, description, maxParticipants } = req.body;
-    
+    const { title, description, maxParticipants, qualificationType, qualificationThreshold } = req.body;
+
     await db.runAsync(
-      `UPDATE games SET title = ?, description = ?, max_participants = ? 
+      `UPDATE games SET title = ?, description = ?, max_participants = ?, qualification_type = ?, qualification_threshold = ?
        WHERE id = ? AND organizer_id = ?`,
-      [title, description, maxParticipants, req.params.gameId, req.user.id]
+      [title, description, maxParticipants, qualificationType, qualificationThreshold, req.params.gameId, req.user.id]
     );
 
     const game = await db.getAsync(
@@ -161,7 +213,14 @@ router.post('/:gameId/questions', authenticateToken, async (req, res) => {
       timeLimit,
       marks,
       difficulty,
-      explanation
+      explanation,
+      evaluationMode,
+      testCases,
+      aiValidationSettings,
+      imageUrl,
+      crosswordGrid,
+      crosswordClues,
+      crosswordSize
     } = req.body;
 
     // Get current question count
@@ -171,25 +230,32 @@ router.post('/:gameId/questions', authenticateToken, async (req, res) => {
     );
 
     const result = await db.runAsync(
-      `INSERT INTO questions (
-        game_id, question_order, question_text, question_type, options,
-        correct_answer, hint, hint_penalty, time_limit, marks, difficulty, explanation
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO questions (game_id, question_order, question_text, question_type, options, correct_answer, hint, hint_penalty, time_limit, marks, difficulty, explanation, evaluation_mode, test_cases, ai_validation_settings, image_url, crossword_grid, crossword_clues, crossword_size, partial_marking_settings, time_decay_enabled, time_decay_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        req.params.gameId,
-        questionCount.count + 1,
-        questionText,
-        questionType,
-        JSON.stringify(options),
-        correctAnswer,
-        hint,
-        hintPenalty || 10,
-        timeLimit || 60,
-        marks || 10,
-        difficulty || 'medium',
-        explanation
-      ]
-    );
+         req.params.gameId,
+         questionCount.count + 1,
+         questionText,
+         questionType,
+         JSON.stringify(options),
+         correctAnswer,
+         hint,
+         hintPenalty || 10,
+         timeLimit || 60,
+         marks || 10,
+         difficulty || 'medium',
+         explanation,
+         evaluationMode || 'mcq',
+         testCases || null,
+         aiValidationSettings || null,
+         imageUrl || null,
+         crosswordGrid ? JSON.stringify(crosswordGrid) : null,
+         crosswordClues ? JSON.stringify(crosswordClues) : null,
+         JSON.stringify(crosswordSize) || null,
+         null, // partial_marking_settings
+         false, // time_decay_enabled
+         0.1 // time_decay_factor
+       ]
+     );
 
     // Update total questions in game
     await db.runAsync(
@@ -222,17 +288,34 @@ router.put('/:gameId/questions/:questionId', authenticateToken, async (req, res)
       timeLimit,
       marks,
       difficulty,
-      explanation
+      explanation,
+      evaluationMode,
+      testCases,
+      aiValidationSettings,
+      imageUrl,
+      crosswordGrid,
+      crosswordClues,
+      crosswordSize
     } = req.body;
 
     await db.runAsync(
-      `UPDATE questions SET 
+      `UPDATE questions SET
        question_text = ?, question_type = ?, options = ?, correct_answer = ?,
-       hint = ?, hint_penalty = ?, time_limit = ?, marks = ?, difficulty = ?, explanation = ?
+       hint = ?, hint_penalty = ?, time_limit = ?, marks = ?, difficulty = ?, explanation = ?,
+       evaluation_mode = ?, test_cases = ?, ai_validation_settings = ?, image_url = ?,
+       crossword_grid = ?, crossword_clues = ?, crossword_size = ?,
+       partial_marking_settings = ?, time_decay_enabled = ?, time_decay_factor = ?
        WHERE id = ? AND game_id = ?`,
       [
         questionText, questionType, JSON.stringify(options), correctAnswer,
         hint, hintPenalty, timeLimit, marks, difficulty, explanation,
+        evaluationMode, testCases, aiValidationSettings, imageUrl,
+        crosswordGrid ? JSON.stringify(crosswordGrid) : null,
+        crosswordClues ? JSON.stringify(crosswordClues) : null,
+        JSON.stringify(crosswordSize),
+        null, // partial_marking_settings
+        false, // time_decay_enabled
+        0.1, // time_decay_factor
         req.params.questionId, req.params.gameId
       ]
     );
@@ -301,19 +384,28 @@ router.post('/:gameId/start', authenticateToken, async (req, res) => {
 
     if (firstQuestion) {
       // Create game session
+      const questionEndTime = new Date(Date.now() + firstQuestion.time_limit * 1000).toISOString();
+      console.log('🎮 Game start - Question time limit:', firstQuestion.time_limit);
+      console.log('🎮 Game start - Question end time:', questionEndTime);
+      console.log('🎮 Game start - First question data:', firstQuestion);
+
       await db.runAsync(
         `INSERT INTO game_sessions (game_id, current_question_id, question_started_at, question_ends_at)
-         VALUES (?, ?, CURRENT_TIMESTAMP, datetime('now', '+' || ? || ' seconds'))`,
-        [req.params.gameId, firstQuestion.id, firstQuestion.time_limit]
+         VALUES (?, ?, CURRENT_TIMESTAMP, ?)`,
+        [req.params.gameId, firstQuestion.id, questionEndTime]
       );
 
       // Emit to all participants
+      console.log('📡 Emitting gameStarted event to room:', `game-${req.params.gameId}`);
       io.to(`game-${req.params.gameId}`).emit('gameStarted', {
         question: {
           ...firstQuestion,
           options: JSON.parse(firstQuestion.options || '[]')
         }
       });
+      console.log('✅ Game started event emitted successfully');
+    } else {
+      console.log('❌ No first question found for game:', req.params.gameId);
     }
 
     res.json({ message: 'Game started successfully' });
@@ -350,15 +442,19 @@ router.post('/:gameId/next-question', authenticateToken, async (req, res) => {
     );
 
     // Update game session
+    const nextQuestionEndTime = new Date(Date.now() + nextQuestion.time_limit * 1000).toISOString();
+    console.log('Next question - Time limit:', nextQuestion.time_limit);
+    console.log('Next question - End time:', nextQuestionEndTime);
+
     await db.runAsync(
-      `UPDATE game_sessions SET 
-       current_question_id = ?, 
-       question_started_at = CURRENT_TIMESTAMP, 
-       question_ends_at = datetime('now', '+' || ? || ' seconds'),
+      `UPDATE game_sessions SET
+       current_question_id = ?,
+       question_started_at = CURRENT_TIMESTAMP,
+       question_ends_at = ?,
        answers_revealed = FALSE,
        answered_participants = 0
        WHERE game_id = ?`,
-      [nextQuestion.id, nextQuestion.time_limit, req.params.gameId]
+      [nextQuestion.id, nextQuestionEndTime, req.params.gameId]
     );
 
     // Emit to all participants
@@ -415,13 +511,16 @@ router.post('/:gameId/reveal-answer', authenticateToken, async (req, res) => {
 router.post('/:gameId/end', authenticateToken, async (req, res) => {
   try {
     await db.runAsync(
-      `UPDATE games SET status = 'completed', ended_at = CURRENT_TIMESTAMP 
+      `UPDATE games SET status = 'completed', ended_at = CURRENT_TIMESTAMP
        WHERE id = ? AND organizer_id = ?`,
       [req.params.gameId, req.user.id]
     );
 
     // Calculate final rankings
     await updateLeaderboard(req.params.gameId);
+
+    // Apply qualification rules
+    await applyQualificationRules(req.params.gameId);
 
     // Emit game end to all participants
     io.to(`game-${req.params.gameId}`).emit('gameEnded');
@@ -430,6 +529,99 @@ router.post('/:gameId/end', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('End game error:', error);
     res.status(500).json({ error: 'Failed to end game' });
+  }
+});
+
+router.post('/:gameId/pause', authenticateToken, async (req, res) => {
+  try {
+    const game = await db.getAsync('SELECT * FROM games WHERE id = ? AND organizer_id = ?', [req.params.gameId, req.user.id]);
+
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    if (game.status !== 'active') {
+      return res.status(400).json({ error: 'Game is not active' });
+    }
+
+    // Update game status to paused
+    await db.runAsync(
+      'UPDATE games SET status = ? WHERE id = ?',
+      ['paused', req.params.gameId]
+    );
+
+    // Record pause time in game session
+    await db.runAsync(
+      'UPDATE game_sessions SET paused_at = CURRENT_TIMESTAMP WHERE game_id = ?',
+      [req.params.gameId]
+    );
+
+    // Emit pause event to all participants
+    io.to(`game-${req.params.gameId}`).emit('gamePaused');
+
+    res.json({ message: 'Game paused successfully' });
+  } catch (error) {
+    console.error('Pause game error:', error);
+    res.status(500).json({ error: 'Failed to pause game' });
+  }
+});
+
+router.post('/:gameId/resume', authenticateToken, async (req, res) => {
+  try {
+    const game = await db.getAsync('SELECT * FROM games WHERE id = ? AND organizer_id = ?', [req.params.gameId, req.user.id]);
+
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    if (game.status !== 'paused') {
+      return res.status(400).json({ error: 'Game is not paused' });
+    }
+
+    // Get current session
+    const session = await db.getAsync(
+      'SELECT * FROM game_sessions WHERE game_id = ?',
+      [req.params.gameId]
+    );
+
+    if (session && session.question_ends_at && session.paused_at) {
+      // Calculate remaining time when paused
+      const pausedTime = new Date(session.paused_at);
+      const endTime = new Date(session.question_ends_at);
+      const remainingMs = endTime - pausedTime;
+
+      if (remainingMs > 0) {
+        // Set new end time
+        const newEndTime = new Date(Date.now() + remainingMs);
+        console.log('Resume - Remaining time:', remainingMs / 1000, 'seconds');
+        console.log('Resume - New end time:', newEndTime.toISOString());
+        await db.runAsync(
+          'UPDATE game_sessions SET question_ends_at = ?, paused_at = NULL WHERE game_id = ?',
+          [newEndTime.toISOString(), req.params.gameId]
+        );
+      } else {
+        // Time already expired, auto-submit answers
+        console.log('Resume - Time already expired, auto-submitting');
+        await db.runAsync(
+          'UPDATE game_sessions SET paused_at = NULL WHERE game_id = ?',
+          [req.params.gameId]
+        );
+      }
+    }
+
+    // Update game status back to active
+    await db.runAsync(
+      'UPDATE games SET status = ? WHERE id = ?',
+      ['active', req.params.gameId]
+    );
+
+    // Emit resume event to all participants
+    io.to(`game-${req.params.gameId}`).emit('gameResumed');
+
+    res.json({ message: 'Game resumed successfully' });
+  } catch (error) {
+    console.error('Resume game error:', error);
+    res.status(500).json({ error: 'Failed to resume game' });
   }
 });
 
@@ -458,12 +650,18 @@ router.get('/:gameCode/leaderboard', async (req, res) => {
 });
 
 // Helper function to update leaderboard
+// This function recalculates participant rankings based on their total scores
+// and broadcasts the updated leaderboard to all connected clients in real-time
 async function updateLeaderboard(gameId) {
+  // Fetch all active participants ordered by score (highest first)
+  // This ensures accurate ranking calculation
   const participants = await db.allAsync(
     'SELECT id, total_score FROM participants WHERE game_id = ? AND status = "active" ORDER BY total_score DESC',
     [gameId]
   );
 
+  // Update each participant's rank in the database
+  // Rank is 1-indexed (1st place, 2nd place, etc.)
   for (let i = 0; i < participants.length; i++) {
     await db.runAsync(
       'UPDATE participants SET current_rank = ? WHERE id = ?',
@@ -471,16 +669,76 @@ async function updateLeaderboard(gameId) {
     );
   }
 
-  // Emit updated leaderboard
+  // Fetch complete leaderboard data for broadcasting
+  // Includes participant names, avatars, scores, and ranks
   const leaderboard = await db.allAsync(
     `SELECT name, avatar, total_score, current_rank
-     FROM participants 
+     FROM participants
      WHERE game_id = ? AND status = 'active'
      ORDER BY total_score DESC`,
     [gameId]
   );
 
+  // Emit real-time leaderboard update to all game participants
+  // This ensures all connected clients see the latest rankings instantly
   io.to(`game-${gameId}`).emit('leaderboardUpdate', leaderboard);
+}
+
+// Helper function to apply qualification rules
+// This function implements different qualification strategies based on game settings:
+// - top_n: Top N highest scoring participants qualify
+// - top_percentage: Top X% of participants qualify
+// - custom_threshold: Participants above a score threshold qualify
+// - none: No qualification rules applied
+async function applyQualificationRules(gameId) {
+  // Fetch game qualification settings
+  const game = await db.getAsync('SELECT qualification_type, qualification_threshold FROM games WHERE id = ?', [gameId]);
+
+  // Skip if no qualification rules are set
+  if (!game || game.qualification_type === 'none') {
+    return;
+  }
+
+  // Get all active participants sorted by score (highest first)
+  const participants = await db.allAsync(
+    'SELECT id, total_score FROM participants WHERE game_id = ? AND status = "active" ORDER BY total_score DESC',
+    [gameId]
+  );
+
+  // No participants to qualify
+  if (participants.length === 0) {
+    return;
+  }
+
+  let qualifiedCount = 0;
+
+  // Calculate number of qualified participants based on qualification type
+  if (game.qualification_type === 'top_n') {
+    // Top N participants qualify (capped at total participants)
+    qualifiedCount = Math.min(game.qualification_threshold, participants.length);
+  } else if (game.qualification_type === 'top_percentage') {
+    // Top X% of participants qualify (rounded up)
+    qualifiedCount = Math.ceil((game.qualification_threshold / 100) * participants.length);
+  } else if (game.qualification_type === 'custom_threshold') {
+    // Count participants who meet or exceed the score threshold
+    qualifiedCount = participants.filter(p => p.total_score >= game.qualification_threshold).length;
+  }
+
+  // Update qualification status for qualified participants (top of the leaderboard)
+  for (let i = 0; i < qualifiedCount; i++) {
+    await db.runAsync(
+      'UPDATE participants SET qualified = TRUE WHERE id = ?',
+      [participants[i].id]
+    );
+  }
+
+  // Mark remaining participants as unqualified
+  for (let i = qualifiedCount; i < participants.length; i++) {
+    await db.runAsync(
+      'UPDATE participants SET qualified = FALSE WHERE id = ?',
+      [participants[i].id]
+    );
+  }
 }
 
 export default router;

@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { 
-  Clock, 
-  Trophy, 
-  Users, 
-  Lightbulb, 
+import {
+  Clock,
+  Trophy,
+  Users,
+  Lightbulb,
   Send,
   CheckCircle,
   XCircle,
   AlertTriangle,
   Medal,
   Target,
-  BarChart3
+  BarChart3,
+  Pause
 } from 'lucide-react'
 import socketManager from '../../utils/socket'
 import CheatDetectionManager from '../../utils/cheatDetection'
@@ -23,7 +24,7 @@ const GameInterface = () => {
   const navigate = useNavigate()
   
   const [participant, setParticipant] = useState(null)
-  const [gameState, setGameState] = useState('waiting') // waiting, active, ended
+  const [gameState, setGameState] = useState('waiting') // waiting, active, paused, ended
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [answer, setAnswer] = useState('')
   const [timeLeft, setTimeLeft] = useState(0)
@@ -37,6 +38,7 @@ const GameInterface = () => {
   const [gameAnalytics, setGameAnalytics] = useState(null)
   const [socket, setSocket] = useState(null)
   const [cheatDetection, setCheatDetection] = useState(null)
+  const [isPaused, setIsPaused] = useState(false)
 
   useEffect(() => {
     initializeGame()
@@ -54,80 +56,120 @@ const GameInterface = () => {
 
   useEffect(() => {
     let timer
-    if (timeLeft > 0 && !submitted && gameState === 'active') {
+    if (timeLeft > 0 && !submitted && gameState === 'active' && !isPaused) {
       timer = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
+            console.log('Timer reached zero, triggering auto-submit')
             autoSubmit()
             return 0
           }
           return prev - 1
         })
       }, 1000)
+    } else if (timeLeft === 0 && !submitted && gameState === 'active' && !isPaused) {
+      // Additional check in case timer wasn't running but time is 0
+      console.log('Time is 0 and not submitted, triggering auto-submit as fallback')
+      autoSubmit()
     }
     return () => clearInterval(timer)
-  }, [timeLeft, submitted, gameState])
+  }, [timeLeft, submitted, gameState, isPaused])
 
   const initializeGame = async () => {
     try {
+      console.log('🔄 Initializing game for participant...')
+
       // Get session data
       const sessionToken = localStorage.getItem('hackarena_session')
       const participantData = localStorage.getItem('hackarena_participant')
-      
+
+      console.log('📋 Session data check:', {
+        hasSessionToken: !!sessionToken,
+        hasParticipantData: !!participantData,
+        gameCode
+      })
+
       if (!sessionToken || !participantData) {
+        console.log('❌ Session data missing, redirecting to join page')
         toast.error('Session expired. Please join again.')
         navigate(`/join/${gameCode}`)
         return
       }
 
       const parsedParticipant = JSON.parse(participantData)
+      console.log('👤 Parsed participant data:', parsedParticipant)
       setParticipant(parsedParticipant)
 
       // Try to rejoin if already in game
+      console.log('🔄 Attempting to rejoin game...')
       await rejoinGame(sessionToken)
 
       // Setup socket connection
+      console.log('🔌 Connecting to socket...')
       const socketConnection = socketManager.connect()
       setSocket(socketConnection)
 
+      console.log('🔌 Socket connection established:', socketConnection?.id)
+
       // Setup cheat detection
       const cheatManager = new CheatDetectionManager((cheatData) => {
+        console.log('🚨 Cheat detected:', cheatData)
         socketConnection?.emit('cheatDetected', cheatData)
       })
       setCheatDetection(cheatManager)
-      
+
+      console.log('🎧 Setting up socket listeners...')
       setupSocketListeners(socketConnection, parsedParticipant)
-      
+
+      console.log('✅ Game initialization completed')
+
     } catch (error) {
-      console.error('Failed to initialize game:', error)
+      console.error('❌ Failed to initialize game:', error)
       toast.error('Failed to connect to game')
     }
   }
 
   const rejoinGame = async (sessionToken) => {
     try {
+      console.log('🔄 Rejoining game with session token...')
       const response = await api.post('/participants/rejoin', {}, {
         headers: { 'x-session-token': sessionToken }
       })
 
+      console.log('📥 Rejoin response:', response.data)
       const { participant: updatedParticipant, currentQuestion: activeQuestion } = response.data
       setParticipant(updatedParticipant)
 
       if (activeQuestion) {
+        console.log('❓ Active question found during rejoin:', activeQuestion)
         setCurrentQuestion(activeQuestion)
         setGameState('active')
-        setTimeLeft(Math.max(0, Math.floor((new Date(activeQuestion.question_ends_at) - new Date()) / 1000)))
+        const calculatedTimeLeft = Math.max(0, Math.floor((new Date(activeQuestion.question_ends_at) - new Date()) / 1000))
+        console.log('⏱️ Rejoin - Question ends at:', activeQuestion.question_ends_at)
+        console.log('⏱️ Rejoin - Current time:', new Date().toISOString())
+        console.log('⏱️ Rejoin - Calculated time left:', calculatedTimeLeft)
+        setTimeLeft(calculatedTimeLeft)
       } else if (updatedParticipant.gameStatus === 'completed') {
+        console.log('🏁 Game already completed during rejoin')
         setGameState('ended')
         fetchAnalytics()
+      } else {
+        console.log('⏳ No active question during rejoin, staying in waiting state')
       }
     } catch (error) {
-      console.error('Rejoin failed:', error)
+      console.error('❌ Rejoin failed:', error)
     }
   }
 
   const setupSocketListeners = (socketConnection, participantData) => {
+    console.log('🎧 Setting up socket listeners for participant:', participantData.id)
+
     // Join participant room
+    console.log('🏠 Joining game room with data:', {
+      gameCode,
+      participantId: participantData.id,
+      role: 'participant'
+    })
     socketConnection.emit('joinGameRoom', {
       gameCode,
       participantId: participantData.id,
@@ -136,6 +178,9 @@ const GameInterface = () => {
 
     // Game started
     socketConnection.on('gameStarted', (data) => {
+      console.log('🎮 Game started event received:', data)
+      console.log('📊 Current game state before update:', gameState)
+
       setCurrentQuestion(data.question)
       setGameState('active')
       setTimeLeft(data.question.time_limit)
@@ -144,12 +189,17 @@ const GameInterface = () => {
       setHintUsed(false)
       setShowHint(false)
       setShowAnswer(false)
-      
+
+      console.log('✅ Game state updated to active')
+      console.log('⏱️ Time left set to:', data.question.time_limit)
+      console.log('❓ Question data:', data.question)
+
       // Start cheat detection
       if (cheatDetection) {
+        console.log('🛡️ Starting cheat detection')
         cheatDetection.startMonitoring()
       }
-      
+
       toast.success('Game started! Good luck!')
     })
 
@@ -163,8 +213,11 @@ const GameInterface = () => {
       setShowHint(false)
       setShowAnswer(false)
       setAnswerResult(null)
-      
-      toast.info('Next question!')
+
+      console.log('Next question - Time limit:', data.question.time_limit)
+      console.log('Next question - Question data:', data.question)
+
+      toast('Next question!')
     })
 
     // Answer revealed
@@ -187,6 +240,18 @@ const GameInterface = () => {
           totalScore: participantRank.total_score
         }))
       }
+    })
+
+    // Game paused
+    socketConnection.on('gamePaused', () => {
+      setIsPaused(true)
+      toast.info('Game has been paused by the organizer')
+    })
+
+    // Game resumed
+    socketConnection.on('gameResumed', () => {
+      setIsPaused(false)
+      toast.success('Game has been resumed!')
     })
 
     // Game ended
@@ -213,38 +278,59 @@ const GameInterface = () => {
     // Eliminated
     socketConnection.on('eliminated', (data) => {
       toast.error(data.message)
-      setTimeout(() => {
-        localStorage.removeItem('hackarena_session')
-        localStorage.removeItem('hackarena_participant')
-        navigate('/')
-      }, 3000)
+      setGameState('eliminated')
+      if (cheatDetection) {
+        cheatDetection.stopMonitoring()
+      }
+    })
+
+    // Re-admitted
+    socketConnection.on('reAdmitted', (data) => {
+      toast.success(data.message)
+      setGameState('waiting')
+      // Re-enable cheat detection if game is active
+      if (gameState === 'active' && cheatDetection) {
+        cheatDetection.startMonitoring()
+      }
     })
 
     // Time expired
     socketConnection.on('questionTimeExpired', () => {
+      console.log('Received questionTimeExpired event from server')
       autoSubmit()
     })
   }
 
-  const submitAnswer = async () => {
+  const submitAnswer = async (isAutoSubmit = false) => {
     if (submitted || !currentQuestion) return
 
     try {
       const sessionToken = localStorage.getItem('hackarena_session')
       const timeTaken = currentQuestion.time_limit - timeLeft
-      
-      const response = await api.post('/participants/answer', {
+
+      const payload = {
         questionId: currentQuestion.id,
         answer: answer.trim(),
         hintUsed,
-        timeTaken
-      }, {
+        timeTaken,
+        autoSubmit: isAutoSubmit
+      }
+
+      console.log('Submitting answer with payload:', payload)
+      console.log('Session token present:', !!sessionToken)
+      console.log('Current question:', currentQuestion)
+      console.log('Time left on frontend:', timeLeft)
+      console.log('Time taken calculated:', timeTaken)
+
+      const response = await api.post('/participants/answer', payload, {
         headers: { 'x-session-token': sessionToken }
       })
 
+      console.log('Submit answer response:', response.data)
+
       setSubmitted(true)
       setAnswerResult(response.data)
-      
+
       if (response.data.isCorrect) {
         toast.success(`Correct! +${response.data.scoreEarned} points`)
       } else {
@@ -253,13 +339,43 @@ const GameInterface = () => {
 
     } catch (error) {
       console.error('Submit answer error:', error)
+      console.error('Error response:', error.response?.data)
+      console.error('Error status:', error.response?.status)
+
+      // Handle time expired error specifically
+      if (error.response?.data?.error === 'Question time has expired') {
+        console.log('Time expired error received, forcing auto-submit')
+        setSubmitted(true)
+        setAnswerResult({
+          isCorrect: false,
+          scoreEarned: 0,
+          message: 'Time expired - answer submitted automatically'
+        })
+        toast.error('Time expired - answer submitted automatically')
+        return
+      }
+
       toast.error('Failed to submit answer')
     }
   }
 
   const autoSubmit = () => {
     if (!submitted && currentQuestion) {
-      submitAnswer()
+      console.log('Auto-submitting answer due to time expiry')
+      // Force submit with current answer or blank if empty
+      const answerToSubmit = answer.trim() || ''
+      console.log('Auto-submit - Answer to submit:', answerToSubmit)
+
+      // Temporarily modify answer state for submission
+      const originalAnswer = answer
+      setAnswer(answerToSubmit)
+
+      // Submit after state update
+      setTimeout(() => {
+        submitAnswer(true)
+        // Restore original answer after submission attempt
+        setTimeout(() => setAnswer(originalAnswer), 100)
+      }, 0)
     }
   }
 
@@ -296,7 +412,30 @@ const GameInterface = () => {
 
     switch (questionType) {
       case 'mcq':
-        const options = JSON.parse(currentQuestion.options || '[]')
+        let options = []
+        if (Array.isArray(currentQuestion.options)) {
+          // Options is already an array, use it directly
+          options = currentQuestion.options
+        } else if (typeof currentQuestion.options === 'string') {
+          // Options is a string, try to parse it
+          try {
+            options = JSON.parse(currentQuestion.options || '[]')
+            if (!Array.isArray(options)) {
+              options = []
+            }
+          } catch (error) {
+            console.error('Invalid options JSON for MCQ question:', currentQuestion.options, error)
+            // Fallback: try to split by comma if it's a comma-separated string
+            if (currentQuestion.options.trim()) {
+              options = currentQuestion.options.split(',').map(opt => opt.trim()).filter(opt => opt)
+            } else {
+              options = []
+            }
+          }
+        } else {
+          // Options is neither array nor string, use empty array
+          options = []
+        }
         return (
           <div className="space-y-3">
             {options.map((option, index) => (
@@ -352,18 +491,94 @@ const GameInterface = () => {
         )
 
       case 'code':
+        const evaluationMode = currentQuestion.evaluation_mode || 'mcq';
+        let placeholder = "Write your code here...";
+
+        if (evaluationMode === 'textarea') {
+          placeholder = "Write your code solution. AI will evaluate semantic correctness...";
+        } else if (evaluationMode === 'compiler') {
+          placeholder = "Write your code. It will be tested against provided test cases...";
+        } else {
+          placeholder = "Write your code here...";
+        }
+
         return (
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            disabled={submitted}
-            className="input w-full h-32 font-mono text-sm resize-none"
-            placeholder="Write your code here..."
-          />
+          <div>
+            <textarea
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              disabled={submitted}
+              className="input w-full h-32 font-mono text-sm resize-none"
+              placeholder={placeholder}
+            />
+            {evaluationMode === 'textarea' && (
+              <p className="text-xs text-gray-500 mt-1">
+                💡 AI will evaluate your code for semantic correctness, not just exact matching.
+              </p>
+            )}
+            {evaluationMode === 'compiler' && (
+              <p className="text-xs text-gray-500 mt-1">
+                🧪 Your code will be tested against multiple test cases for correctness and efficiency.
+              </p>
+            )}
+          </div>
         )
 
       case 'fill':
       case 'short':
+      case 'image':
+        return (
+          <input
+            type="text"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            disabled={submitted}
+            className="input w-full"
+            placeholder="Type your answer..."
+          />
+        )
+
+      case 'crossword':
+        return (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600 mb-2">
+              Fill in the crossword answers in the format: 1A:WORD,2D:WORD,...
+            </div>
+            <textarea
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              disabled={submitted}
+              className="input w-full h-32 resize-none"
+              placeholder="1A:EXAMPLE,2D:TEST,..."
+            />
+            {currentQuestion.crossword_clues && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-2">Clues:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  {(() => {
+                    let clues = {}
+                    try {
+                      clues = JSON.parse(currentQuestion.crossword_clues)
+                      if (typeof clues !== 'object' || clues === null) {
+                        clues = {}
+                      }
+                    } catch (error) {
+                      console.error('Invalid crossword_clues JSON:', currentQuestion.crossword_clues, error)
+                      clues = {}
+                    }
+                    return Object.entries(clues).map(([clueNum, clueData]) => (
+                      <div key={clueNum} className="flex">
+                        <span className="font-medium w-12">{clueNum}:</span>
+                        <span>{clueData?.clue || 'No clue available'}</span>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+
       default:
         return (
           <input
@@ -376,6 +591,33 @@ const GameInterface = () => {
           />
         )
     }
+  }
+
+  // Eliminated screen
+  if (gameState === 'eliminated') {
+    return (
+      <div className="participant-interface min-h-screen flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="animate-pulse mb-8">
+            {participant?.avatar && (
+              <div className="text-6xl mb-4">{participant.avatar}</div>
+            )}
+            <XCircle className="h-16 w-16 text-red-400 mx-auto" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-4">
+            Eliminated
+          </h1>
+          <p className="text-blue-100 mb-8">
+            You have been eliminated from the game by the organizer.
+          </p>
+          <div className="card p-6 bg-white/10 backdrop-blur-sm border-white/20">
+            <p className="text-white text-sm">
+              Waiting for the organizer to re-admit you or for the game to end...
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Waiting screen
@@ -503,6 +745,12 @@ const GameInterface = () => {
                             <XCircle className="h-4 w-4 mr-1" />
                           )}
                           {answer.scoreEarned}/{answer.maxScore} pts
+                          {answer.timeBonus > 0 && (
+                            <span className="text-blue-500 ml-1">(+{answer.timeBonus} time bonus)</span>
+                          )}
+                          {answer.partialScore > 0 && (
+                            <span className="text-orange-500 ml-1">(+{answer.partialScore} partial)</span>
+                          )}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">{answer.questionText}</p>
@@ -521,7 +769,14 @@ const GameInterface = () => {
             </div>
           )}
 
-          <div className="text-center mt-8">
+          <div className="text-center mt-8 space-x-4">
+            <button
+              onClick={() => navigate('/analytics')}
+              className="btn btn-primary"
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              View Detailed Analytics
+            </button>
             <button
               onClick={() => {
                 localStorage.removeItem('hackarena_session')
@@ -564,7 +819,7 @@ const GameInterface = () => {
               <p className="text-xs text-blue-100">Time remaining</p>
             </div>
           </div>
-          
+
           {cheatWarnings > 0 && (
             <div className="mt-3 p-2 bg-red-500/20 border border-red-400/30 rounded-lg">
               <div className="flex items-center space-x-2 text-red-200">
@@ -573,6 +828,16 @@ const GameInterface = () => {
                   {cheatWarnings} warning{cheatWarnings > 1 ? 's' : ''} - Avoid suspicious activities
                 </span>
               </div>
+            </div>
+          )}
+
+          {isPaused && (
+            <div className="mt-3 p-4 bg-yellow-500/20 border border-yellow-400/30 rounded-lg">
+              <div className="flex items-center justify-center space-x-2 text-yellow-200">
+                <Pause className="h-5 w-5" />
+                <span className="text-lg font-semibold">Game Paused</span>
+              </div>
+              <p className="text-center text-yellow-100 mt-2">The organizer has paused the game. Please wait for it to resume.</p>
             </div>
           )}
         </div>
@@ -595,6 +860,17 @@ const GameInterface = () => {
             <h3 className="text-xl font-semibold text-gray-900 mb-6">
               {currentQuestion.question_text}
             </h3>
+
+            {/* Display image for image-based questions */}
+            {currentQuestion.question_type === 'image' && currentQuestion.image_url && (
+              <div className="mb-6">
+                <img
+                  src={`http://localhost:3001${currentQuestion.image_url}`}
+                  alt="Question"
+                  className="max-w-full h-64 object-contain border rounded-lg shadow-sm"
+                />
+              </div>
+            )}
 
             {/* Answer Input */}
             <div className="mb-6">
@@ -636,12 +912,17 @@ const GameInterface = () => {
                     Answer submitted
                   </span>
                 ) : (
-                  <span>Answer quickly for more points!</span>
+                  <span>
+                    {currentQuestion?.time_decay_enabled
+                      ? 'Answer quickly for exponential time bonus!'
+                      : 'Answer quickly for more points!'
+                    }
+                  </span>
                 )}
               </div>
-              
+
               <button
-                onClick={submitAnswer}
+                onClick={() => submitAnswer()}
                 disabled={submitted || !answer.trim()}
                 className="btn btn-primary flex items-center"
               >
@@ -671,6 +952,17 @@ const GameInterface = () => {
                   {answerResult.isCorrect && (
                     <span className="text-green-600">
                       +{answerResult.scoreEarned} points
+                      {answerResult.timeBonus > 0 && (
+                        <span className="text-blue-500 ml-1">(+{answerResult.timeBonus} time bonus)</span>
+                      )}
+                      {answerResult.partialScore > 0 && (
+                        <span className="text-orange-500 ml-1">(+{answerResult.partialScore} partial)</span>
+                      )}
+                    </span>
+                  )}
+                  {!answerResult.isCorrect && answerResult.partialScore > 0 && (
+                    <span className="text-orange-600">
+                      +{answerResult.partialScore} partial points
                     </span>
                   )}
                 </div>

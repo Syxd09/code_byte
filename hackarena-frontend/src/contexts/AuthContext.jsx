@@ -62,15 +62,32 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post('/auth/register', { email, password, name })
       const { token, user } = response.data
-      
+
       localStorage.setItem('hackarena_token', token)
       setUser(user)
-      
+
       return { success: true }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Registration failed' 
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Registration failed'
+      }
+    }
+  }
+
+  const googleLogin = async (idToken) => {
+    try {
+      const response = await api.post('/auth/google', { idToken })
+      const { token, user } = response.data
+
+      localStorage.setItem('hackarena_token', token)
+      setUser(user)
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Google authentication failed'
       }
     }
   }
@@ -84,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     user,
     login,
     register,
+    googleLogin,
     logout,
     loading
   }
