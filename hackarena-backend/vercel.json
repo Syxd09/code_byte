@@ -1,18 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "src/server.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "database/**",
-          "src/**"
-        ],
-        "maxDuration": 30
-      }
+  "functions": {
+    "src/server.js": {
+      "maxDuration": 30
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
@@ -30,5 +22,5 @@
     }
   },
   "installCommand": "npm ci",
-  "buildCommand": "npm run build:vercel"
+  "buildCommand": "mkdir -p /tmp/sandbox && npm run build:vercel"
 }

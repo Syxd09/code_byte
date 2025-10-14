@@ -18,11 +18,15 @@ const EXECUTION_LIMITS = {
 };
 
 // Sandbox directory for code execution
-const SANDBOX_DIR = path.join(__dirname, '../../sandbox');
+const SANDBOX_DIR = process.env.VERCEL ? '/tmp/sandbox' : path.join(__dirname, '../../sandbox');
 
-// Ensure sandbox directory exists
-if (!fs.existsSync(SANDBOX_DIR)) {
-  fs.mkdirSync(SANDBOX_DIR, { recursive: true });
+// Ensure sandbox directory exists (only in non-serverless environments)
+if (!process.env.VERCEL && !fs.existsSync(SANDBOX_DIR)) {
+  try {
+    fs.mkdirSync(SANDBOX_DIR, { recursive: true });
+  } catch (error) {
+    console.warn('Could not create sandbox directory:', error.message);
+  }
 }
 
 // Language configurations
