@@ -8,7 +8,8 @@
         "includeFiles": [
           "database/**",
           "src/**"
-        ]
+        ],
+        "maxDuration": 30
       }
     }
   ],
@@ -18,11 +19,6 @@
       "dest": "src/server.js"
     }
   ],
-  "functions": {
-    "src/server.js": {
-      "maxDuration": 30
-    }
-  },
   "env": {
     "NODE_ENV": "production",
     "VERCEL": "1"
