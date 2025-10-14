@@ -33,5 +33,6 @@
       "VERCEL": "1"
     }
   },
-  "installCommand": "npm ci && npm rebuild sqlite3"
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:vercel"
 }

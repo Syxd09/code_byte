@@ -12,6 +12,7 @@ try {
 } catch (error) {
   console.error('Failed to load SQLite3 module:', error.message);
   console.error('This may indicate a platform compatibility issue with native binaries');
+  // Continue execution - database init will handle this
 }
 import express from 'express';
 import { createServer } from 'http';

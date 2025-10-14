@@ -6,14 +6,24 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Handle Vercel deployment path
+// Handle serverless deployment paths
 const isVercel = process.env.VERCEL === '1';
-const dbPath = isVercel
-  ? '/tmp/hackarena.db'  // Vercel writable directory
-  : process.env.DATABASE_URL || path.join(__dirname, '../../database/hackarena.db');
+const isRender = process.env.RENDER === 'true';
+const isServerless = isVercel || isRender;
+
+let dbPath;
+if (isVercel) {
+  dbPath = '/tmp/hackarena.db';  // Vercel writable directory
+} else if (isRender) {
+  dbPath = process.env.DATABASE_URL || '/opt/render/project/src/database/hackarena.db';
+} else {
+  dbPath = process.env.DATABASE_URL || path.join(__dirname, '../../database/hackarena.db');
+}
 
 console.log('Database path:', dbPath);
 console.log('Is Vercel environment:', isVercel);
+console.log('Is Render environment:', isRender);
+console.log('Is serverless environment:', isServerless);
 
 const db = new sqlite3.Database(dbPath);
 
