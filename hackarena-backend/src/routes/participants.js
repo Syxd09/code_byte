@@ -2,6 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/init.js';
 import { authenticateParticipant } from '../middleware/auth.js';
+import CodeExecutionService from '../services/codeExecution.js';
 
 // Time decay function
 function calculateTimeDecayBonus(timeTaken, timeLimit, decayFactor = 0.1) {
@@ -36,24 +37,12 @@ function calculatePartialScore(userAnswer, correctAnswer, questionType, partialS
       const accuracy = matchingWords / correctWords.length;
       return settings.partialPercentage ? (accuracy * settings.maxPartialScore) : 0;
     } else if (questionType === 'code') {
-      // For code questions, check for keyword matches or structure similarity
-      const userCode = userAnswer.toLowerCase();
-      const correctCode = correctAnswer.toLowerCase();
+      // Enhanced partial scoring for code questions using CodeExecutionService
+      const language = question.programming_language || 'javascript';
+      const evaluationMode = question.evaluation_mode || 'mcq';
 
-      let score = 0;
-      const keywords = ['function', 'def', 'class', 'if', 'for', 'while', 'return', 'print', 'console.log'];
-
-      for (const keyword of keywords) {
-        if (userCode.includes(keyword) && correctCode.includes(keyword)) {
-          score += settings.keywordWeight || 1;
-        }
-      }
-
-      // Length similarity bonus
-      const lengthRatio = Math.min(userCode.length, correctCode.length) / Math.max(userCode.length, correctCode.length);
-      score += lengthRatio * (settings.lengthWeight || 2);
-
-      return Math.min(score, settings.maxPartialScore || 5);
+      // Use the new partial scoring algorithm
+      return CodeExecutionService.calculatePartialScore(userAnswer, correctAnswer, null, language, evaluationMode);
     }
 
     return 0;
@@ -66,94 +55,67 @@ function calculatePartialScore(userAnswer, correctAnswer, questionType, partialS
 const router = express.Router();
 
 // Code evaluation functions
-function evaluateCodeSemantic(userCode, correctCode, aiSettings) {
-  // Basic semantic checking - can be enhanced with external APIs later
+async function evaluateCodeSemantic(userCode, correctCode, aiSettings, language = 'javascript') {
+  // Enhanced semantic checking using the new CodeExecutionService
   if (!userCode || !correctCode) return false;
 
-  const userCodeNormalized = userCode.toLowerCase().trim();
-  const correctCodeNormalized = correctCode.toLowerCase().trim();
+  try {
+    // Use the semantic analyzer from CodeExecutionService
+    const analysis = CodeExecutionService.analyzeCode(userCode, language, correctCode);
 
-  // Check for exact match first
-  if (userCodeNormalized === correctCodeNormalized) return true;
+    // Determine if code passes semantic evaluation
+    const semanticScore = (analysis.structureScore + analysis.keywordScore + analysis.similarityScore) / 3;
 
-  // Basic semantic checks
-  const checks = [
-    // Check if key programming constructs are present
-    () => {
-      const keywords = ['function', 'def', 'class', 'if', 'for', 'while', 'return'];
-      const userHasKeywords = keywords.some(kw => userCodeNormalized.includes(kw));
-      const correctHasKeywords = keywords.some(kw => correctCodeNormalized.includes(kw));
-      return userHasKeywords === correctHasKeywords;
-    },
-    // Check code length similarity (within 50% difference)
-    () => {
-      const lengthRatio = userCodeNormalized.length / correctCodeNormalized.length;
-      return lengthRatio > 0.5 && lengthRatio < 2.0;
-    },
-    // Check for common code patterns
-    () => {
-      const patterns = [
-        /print\(|console\.log\(/,
-        /input\(|prompt\(/,
-        /len\(|length/,
-        /\d+/
-      ];
-      const userMatches = patterns.filter(p => p.test(userCodeNormalized)).length;
-      const correctMatches = patterns.filter(p => p.test(correctCodeNormalized)).length;
-      return Math.abs(userMatches - correctMatches) <= 1;
-    }
-  ];
+    // Pass if semantic score is above threshold (6 out of 10)
+    return semanticScore >= 6;
 
-  // Pass if at least 2 out of 3 checks pass
-  const passedChecks = checks.filter(check => check()).length;
-  return passedChecks >= 2;
+  } catch (error) {
+    console.error('Error in semantic evaluation:', error);
+    // Fallback to basic checks
+    const userCodeNormalized = userCode.toLowerCase().trim();
+    const correctCodeNormalized = correctCode.toLowerCase().trim();
+
+    if (userCodeNormalized === correctCodeNormalized) return true;
+
+    const checks = [
+      () => {
+        const keywords = ['function', 'def', 'class', 'if', 'for', 'while', 'return'];
+        const userHasKeywords = keywords.some(kw => userCodeNormalized.includes(kw));
+        const correctHasKeywords = keywords.some(kw => correctCodeNormalized.includes(kw));
+        return userHasKeywords === correctHasKeywords;
+      },
+      () => {
+        const lengthRatio = userCodeNormalized.length / correctCodeNormalized.length;
+        return lengthRatio > 0.5 && lengthRatio < 2.0;
+      }
+    ];
+
+    const passedChecks = checks.filter(check => check()).length;
+    return passedChecks >= 1;
+  }
 }
 
-function evaluateCodeWithTestCases(userCode, testCasesJson, correctCode) {
-  // Basic test case validation - in a real implementation, this would run the code
+async function evaluateCodeWithTestCases(userCode, testCasesJson, correctCode, language = 'javascript') {
+  // Enhanced test case validation using the new CodeExecutionService
   if (!userCode || !testCasesJson) return false;
 
   try {
     const testCases = JSON.parse(testCasesJson);
     if (!Array.isArray(testCases) || testCases.length === 0) return false;
 
-    // For now, implement basic validation
-    // In a full implementation, this would:
-    // 1. Execute user code with test inputs
-    // 2. Compare outputs with expected results
-    // 3. Check for optimization (time/space complexity)
+    // Execute code against all test cases
+    const testResults = await CodeExecutionService.executeTestCases(userCode, language, testCases);
 
-    const userCodeNormalized = userCode.toLowerCase().trim();
-    const correctCodeNormalized = correctCode.toLowerCase().trim();
+    // Calculate success rate
+    const passedTests = testResults.filter(result => result.success).length;
+    const totalTests = testResults.length;
+    const passRate = passedTests / totalTests;
 
-    // Basic checks for compiler mode
-    let score = 0;
-
-    // Check if code structure is similar
-    if (userCodeNormalized.includes('function') || userCodeNormalized.includes('def')) {
-      score += 1;
-    }
-
-    // Check for input/output handling
-    if (userCodeNormalized.includes('input') || userCodeNormalized.includes('readline')) {
-      score += 1;
-    }
-
-    // Check for output statements
-    if (userCodeNormalized.includes('print') || userCodeNormalized.includes('console.log')) {
-      score += 1;
-    }
-
-    // Check code length (should be reasonable)
-    if (userCodeNormalized.length > 10 && userCodeNormalized.length < 1000) {
-      score += 1;
-    }
-
-    // Pass if score is at least 3 out of 4
-    return score >= 3;
+    // Return true if at least 80% tests pass
+    return passRate >= 0.8;
 
   } catch (error) {
-    console.error('Error parsing test cases:', error);
+    console.error('Error executing test cases:', error);
     return false;
   }
 }
@@ -385,6 +347,31 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
     console.log('Participant:', req.participant?.id);
 
     const { questionId, answer, hintUsed, timeTaken, autoSubmit } = req.body;
+
+    // Security: Validate input size and content
+    if (answer && answer.length > 10000) {
+      return res.status(400).json({ error: 'Answer too large' });
+    }
+
+    // Security: Basic input sanitization for code
+    if (typeof answer === 'string') {
+      // Check for potentially dangerous patterns
+      const dangerousPatterns = [
+        /require\s*\(\s*['"`]child_process['"`]\s*\)/i,
+        /require\s*\(\s*['"`]fs['"`]\s*\)/i,
+        /exec\s*\(/i,
+        /spawn\s*\(/i,
+        /eval\s*\(/i,
+        /Function\s*\(/i
+      ];
+
+      for (const pattern of dangerousPatterns) {
+        if (pattern.test(answer)) {
+          console.warn('Potentially dangerous code detected from participant:', req.participant?.id);
+          // Log security event but don't block - sandboxing will handle it
+        }
+      }
+    }
     console.log('Destructured autoSubmit value:', autoSubmit, 'Type:', typeof autoSubmit);
     const participant = req.participant;
 
@@ -445,44 +432,113 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
     let scoreEarned = 0;
     let timeBonus = 0;
     let partialScore = 0;
+    let codeQualityScore = 0;
+    let performanceScore = 0;
+    let correctnessScore = 0;
+    let executionResults = null;
+    let evaluationMode = question.evaluation_mode || 'mcq';
+    let executionTimeMs = 0;
+    let memoryUsedKb = 0;
+    let testCasesPassed = 0;
+    let totalTestCases = 0;
+
+    const language = question.programming_language || 'javascript';
 
     if (question.question_type === 'mcq') {
       isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+      correctnessScore = isCorrect ? 10 : 0;
     } else if (question.question_type === 'fill') {
       isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+      correctnessScore = isCorrect ? 10 : 0;
     } else if (question.question_type === 'image') {
       // For image-based questions, answer is typically a text description or identification
       isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+      correctnessScore = isCorrect ? 10 : 0;
     } else if (question.question_type === 'crossword') {
       // Validate crossword answers
       isCorrect = evaluateCrosswordAnswer(answer, question.crossword_grid, question.crossword_clues, question.crossword_size);
+      correctnessScore = isCorrect ? 10 : 0;
     } else if (question.question_type === 'code') {
-      // Handle different evaluation modes for code questions
-      const evaluationMode = question.evaluation_mode || 'mcq';
+      // Enhanced code question evaluation with detailed scoring
+      try {
+        if (evaluationMode === 'mcq') {
+          // Auto-check against key
+          isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+          correctnessScore = isCorrect ? 10 : 0;
+        } else if (evaluationMode === 'semantic') {
+          // AI-based semantic validation with detailed analysis
+          isCorrect = await evaluateCodeSemantic(answer, question.correct_answer, question.ai_validation_settings, language);
+          const analysis = CodeExecutionService.analyzeCode(answer, language, question.correct_answer);
 
-      if (evaluationMode === 'mcq') {
-        // Auto-check against key
-        isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
-      } else if (evaluationMode === 'textarea') {
-        // AI-based semantic validation
-        isCorrect = evaluateCodeSemantic(answer, question.correct_answer, question.ai_validation_settings);
-      } else if (evaluationMode === 'compiler') {
-        // Test case validation with correctness and optimization checking
-        isCorrect = evaluateCodeWithTestCases(answer, question.test_cases, question.correct_answer);
-      } else {
-        // Default to simple text comparison
-        isCorrect = answer.toLowerCase().includes(question.correct_answer.toLowerCase());
+          correctnessScore = (analysis.structureScore + analysis.keywordScore + analysis.similarityScore) / 3;
+          codeQualityScore = analysis.complexityScore;
+          performanceScore = 0; // Not applicable for semantic evaluation
+          isCorrect = correctnessScore >= 6; // Pass threshold
+        } else if (evaluationMode === 'compiler') {
+          // Test case validation with detailed metrics
+          const testResults = await CodeExecutionService.executeTestCases(answer, language, JSON.parse(question.test_cases || '[]'));
+          executionResults = JSON.stringify(testResults);
+
+          testCasesPassed = testResults.filter(r => r.success).length;
+          totalTestCases = testResults.length;
+          const passRate = totalTestCases > 0 ? testCasesPassed / totalTestCases : 0;
+
+          // Calculate metrics
+          executionTimeMs = testResults.reduce((sum, r) => sum + (r.executionTime || 0), 0);
+          memoryUsedKb = testResults.reduce((sum, r) => sum + (r.memoryUsage || 0), 0) / 1024;
+
+          correctnessScore = passRate * 10;
+          performanceScore = Math.max(0, 10 - (executionTimeMs / 1000)); // Penalize slow execution
+          codeQualityScore = CodeExecutionService.calculatePartialScore(answer, question.correct_answer, testResults, language, evaluationMode);
+
+          isCorrect = passRate >= 0.8; // 80% pass rate required
+        } else if (evaluationMode === 'bugfix') {
+          // Bug fix validation with detailed analysis
+          const validation = CodeExecutionService.validateBugFix(question.buggy_code || '', answer, question.test_cases || '[]');
+          executionResults = JSON.stringify(validation);
+
+          correctnessScore = (validation.fixesApplied ? 5 : 0) + (validation.testsPass ? 5 : 0);
+          codeQualityScore = validation.improvementScore;
+          performanceScore = 0; // Not measured for bug fixes
+          testCasesPassed = validation.testsPass ? 1 : 0;
+          totalTestCases = 1;
+
+          isCorrect = validation.fixesApplied && validation.testsPass;
+        } else {
+          // Default to simple text comparison
+          isCorrect = answer.toLowerCase().includes(question.correct_answer.toLowerCase());
+          correctnessScore = isCorrect ? 10 : 0;
+        }
+
+        // Handle execution failures and timeouts
+        if (executionResults && JSON.parse(executionResults).some(r => r.error && r.error.includes('timeout'))) {
+          performanceScore = Math.max(0, performanceScore - 2); // Penalty for timeouts
+          correctnessScore = Math.max(0, correctnessScore - 1); // Minor penalty for timeouts
+        }
+
+      } catch (error) {
+        console.error('Code evaluation error:', error);
+        // On evaluation failure, fall back to partial scoring
+        partialScore = calculatePartialScore(answer, question.correct_answer, question.question_type, question.partial_marking_settings);
+        correctnessScore = partialScore;
+        isCorrect = false;
       }
     } else {
       isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+      correctnessScore = isCorrect ? 10 : 0;
     }
 
-    // Calculate base score
+    // Calculate base score with enhanced metrics
     if (isCorrect) {
       scoreEarned = question.marks;
-    } else if (question.partial_marking_settings) {
+    } else if (question.partial_marking_settings || question.question_type === 'code') {
       // Apply partial marking for incorrect answers
-      partialScore = calculatePartialScore(answer, question.correct_answer, question.question_type, question.partial_marking_settings);
+      if (question.question_type === 'code') {
+        // For code questions, use the calculated partial score from evaluation
+        partialScore = Math.max(partialScore, CodeExecutionService.calculatePartialScore(answer, question.correct_answer, executionResults ? JSON.parse(executionResults) : null, language, evaluationMode));
+      } else {
+        partialScore = calculatePartialScore(answer, question.correct_answer, question.question_type, question.partial_marking_settings);
+      }
       scoreEarned = partialScore;
     }
 
@@ -505,11 +561,18 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
 
     scoreEarned = Math.max(0, scoreEarned);
 
-    // Save answer
+    // Save answer with detailed scoring information
     await db.runAsync(
-      `INSERT INTO answers (participant_id, question_id, answer_text, is_correct, score_earned, time_taken, hint_used)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [participant.id, questionId, answer, isCorrect, scoreEarned, timeTaken, hintUsed]
+      `INSERT INTO answers (
+        participant_id, question_id, answer_text, is_correct, score_earned, time_taken, hint_used,
+        execution_results, partial_score, code_quality_score, performance_score, correctness_score,
+        evaluation_mode, execution_time_ms, memory_used_kb, test_cases_passed, total_test_cases
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        participant.id, questionId, answer, isCorrect, scoreEarned, timeTaken, hintUsed,
+        executionResults, partialScore, codeQualityScore, performanceScore, correctnessScore,
+        evaluationMode, executionTimeMs, memoryUsedKb, testCasesPassed, totalTestCases
+      ]
     );
 
     // Update participant total score
@@ -524,12 +587,26 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
       [questionId]
     );
 
+    // Log resource usage for monitoring
+    const resourceStats = CodeExecutionService.getResourceStats();
+    if (resourceStats.memoryUsage > 50 * 1024 * 1024) { // 50MB
+      console.warn('High memory usage detected:', resourceStats);
+    }
+
     res.json({
       submitted: true,
       isCorrect,
       scoreEarned,
       timeBonus,
       partialScore,
+      codeQualityScore,
+      performanceScore,
+      correctnessScore,
+      evaluationMode,
+      executionTimeMs,
+      memoryUsedKb,
+      testCasesPassed,
+      totalTestCases,
       message: isCorrect ? 'Correct answer!' : (partialScore > 0 ? 'Partial credit awarded!' : 'Incorrect answer')
     });
   } catch (error) {
@@ -632,9 +709,9 @@ router.get('/analytics', authenticateParticipant, async (req, res) => {
   try {
     const participant = req.participant;
 
-    // Get all answers for this participant
+    // Get all answers for this participant with detailed scoring information
     const answers = await db.allAsync(
-      `SELECT a.*, q.question_text, q.correct_answer, q.marks, q.question_type
+      `SELECT a.*, q.question_text, q.correct_answer, q.marks, q.question_type, q.evaluation_mode
        FROM answers a
        JOIN questions q ON a.question_id = q.id
        WHERE a.participant_id = ?
@@ -647,6 +724,18 @@ router.get('/analytics', authenticateParticipant, async (req, res) => {
     const correctAnswers = answers.filter(a => a.is_correct).length;
     const totalScore = answers.reduce((sum, a) => sum + a.score_earned, 0);
     const averageTime = totalQuestions > 0 ? answers.reduce((sum, a) => sum + a.time_taken, 0) / totalQuestions : 0;
+
+    // Calculate code-specific statistics
+    const codeQuestions = answers.filter(a => a.question_type === 'code');
+    const codeStats = {
+      totalCodeQuestions: codeQuestions.length,
+      codeCorrectAnswers: codeQuestions.filter(a => a.is_correct).length,
+      averageCodeQuality: codeQuestions.length > 0 ? codeQuestions.reduce((sum, a) => sum + (a.code_quality_score || 0), 0) / codeQuestions.length : 0,
+      averagePerformance: codeQuestions.length > 0 ? codeQuestions.reduce((sum, a) => sum + (a.performance_score || 0), 0) / codeQuestions.length : 0,
+      averageCorrectness: codeQuestions.length > 0 ? codeQuestions.reduce((sum, a) => sum + (a.correctness_score || 0), 0) / codeQuestions.length : 0,
+      totalTestCasesPassed: codeQuestions.reduce((sum, a) => sum + (a.test_cases_passed || 0), 0),
+      totalTestCases: codeQuestions.reduce((sum, a) => sum + (a.total_test_cases || 0), 0)
+    };
 
     res.json({
       participant: {
@@ -661,7 +750,8 @@ router.get('/analytics', authenticateParticipant, async (req, res) => {
         correctAnswers,
         accuracy: totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0,
         averageTime: Math.round(averageTime),
-        totalScore
+        totalScore,
+        codeStats
       },
       answers: answers.map(a => ({
         questionText: a.question_text,
@@ -671,7 +761,18 @@ router.get('/analytics', authenticateParticipant, async (req, res) => {
         scoreEarned: a.score_earned,
         maxScore: a.marks,
         timeTaken: a.time_taken,
-        hintUsed: a.hint_used
+        hintUsed: a.hint_used,
+        questionType: a.question_type,
+        evaluationMode: a.evaluation_mode,
+        partialScore: a.partial_score,
+        codeQualityScore: a.code_quality_score,
+        performanceScore: a.performance_score,
+        correctnessScore: a.correctness_score,
+        executionTimeMs: a.execution_time_ms,
+        memoryUsedKb: a.memory_used_kb,
+        testCasesPassed: a.test_cases_passed,
+        totalTestCases: a.total_test_cases,
+        executionResults: a.execution_results ? JSON.parse(a.execution_results) : null
       }))
     });
   } catch (error) {

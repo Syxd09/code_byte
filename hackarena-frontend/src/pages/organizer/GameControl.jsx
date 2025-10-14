@@ -26,6 +26,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import GameCodeDisplay from '../../components/GameCodeDisplay'
 import QuestionForm from '../../components/QuestionForm'
 import AnalyticsCharts from '../../components/AnalyticsCharts'
+import Header from '../../components/Header'
 import toast from 'react-hot-toast'
 
 const GameControl = () => {
@@ -302,83 +303,81 @@ const GameControl = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Link to="/dashboard" className="text-gray-600 hover:text-gray-900">
-                ← Dashboard
-              </Link>
-              <h1 className="text-xl font-bold text-gray-900">{game.title}</h1>
-              <span className={`px-3 py-1 text-sm rounded-full ${
-                game.status === 'active' ? 'bg-green-100 text-green-800' :
-                game.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
-                game.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {game.status}
-              </span>
-            </div>
+      <Header />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center space-x-4">
+            <Link to="/dashboard" className="text-gray-600 hover:text-gray-900">
+              ← DSBA Dashboard
+            </Link>
+            <h1 className="text-xl font-bold text-gray-900">{game.title}</h1>
+            <span className={`px-3 py-1 text-sm rounded-full ${
+              game.status === 'active' ? 'bg-green-100 text-green-800' :
+              game.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+              game.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {game.status}
+            </span>
+          </div>
 
-            <div className="flex items-center space-x-4">
-              <Link
-                to={`/leaderboard/${game.game_code}`}
-                target="_blank"
-                className="btn btn-secondary"
-              >
-                <Eye className="h-4 w-4 mr-2" />
-                View Public Board
-              </Link>
-              
-              <div className="flex items-center space-x-2">
-                {game.status === 'draft' && (
-                  <button onClick={startGame} className="btn btn-primary">
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Game
+          <div className="flex items-center space-x-4">
+            <Link
+              to={`/leaderboard/${game.game_code}`}
+              target="_blank"
+              className="btn btn-secondary"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View Public Board
+            </Link>
+
+            <div className="flex items-center space-x-2">
+              {game.status === 'draft' && (
+                <button onClick={startGame} className="btn btn-primary">
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Game
+                </button>
+              )}
+
+              {game.status === 'active' && (
+                <>
+                  <button onClick={pauseGame} className="btn btn-secondary">
+                    <Pause className="h-4 w-4 mr-2" />
+                    Pause Game
                   </button>
-                )}
-                
-                {game.status === 'active' && (
-                  <>
-                    <button onClick={pauseGame} className="btn btn-secondary">
-                      <Pause className="h-4 w-4 mr-2" />
-                      Pause Game
-                    </button>
-                    <button onClick={nextQuestion} className="btn btn-primary">
-                      <SkipForward className="h-4 w-4 mr-2" />
-                      Next Question
-                    </button>
-                    <button onClick={revealAnswer} className="btn btn-secondary">
-                      <Eye className="h-4 w-4 mr-2" />
-                      Reveal Answer
-                    </button>
-                    <button onClick={endGame} className="btn btn-danger">
-                      <Square className="h-4 w-4 mr-2" />
-                      End Game
-                    </button>
-                  </>
-                )}
+                  <button onClick={nextQuestion} className="btn btn-primary">
+                    <SkipForward className="h-4 w-4 mr-2" />
+                    Next Question
+                  </button>
+                  <button onClick={revealAnswer} className="btn btn-secondary">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Reveal Answer
+                  </button>
+                  <button onClick={endGame} className="btn btn-danger">
+                    <Square className="h-4 w-4 mr-2" />
+                    End Game
+                  </button>
+                </>
+              )}
 
-                {game.status === 'paused' && (
-                  <>
-                    <button onClick={resumeGame} className="btn btn-primary">
-                      <Play className="h-4 w-4 mr-2" />
-                      Resume Game
-                    </button>
-                    <button onClick={endGame} className="btn btn-danger">
-                      <Square className="h-4 w-4 mr-2" />
-                      End Game
-                    </button>
-                  </>
-                )}
-              </div>
+              {game.status === 'paused' && (
+                <>
+                  <button onClick={resumeGame} className="btn btn-primary">
+                    <Play className="h-4 w-4 mr-2" />
+                    Resume Game
+                  </button>
+                  <button onClick={endGame} className="btn btn-danger">
+                    <Square className="h-4 w-4 mr-2" />
+                    End Game
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Game Info & Current Question */}
           <div className="lg:col-span-2 space-y-6">

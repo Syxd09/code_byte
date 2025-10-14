@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    allowedHosts: ['says-points-cemetery-beef.trycloudflare.com']
   },
   build: {
     outDir: 'dist',

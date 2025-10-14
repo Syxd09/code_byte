@@ -4,8 +4,10 @@ import { Trophy, Users, Clock, Target, RefreshCw } from 'lucide-react'
 import { api } from '../../utils/api'
 import socketManager from '../../utils/socket'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import Footer from '../../components/Footer'
 
 const PublicLeaderboard = () => {
+  console.log('PublicLeaderboard component rendered')
   const { gameCode } = useParams()
   const [leaderboard, setLeaderboard] = useState([])
   const [gameInfo, setGameInfo] = useState(null)
@@ -78,21 +80,20 @@ const PublicLeaderboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white">
-      {/* Header */}
-      <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white">
         <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-yellow-300" />
+                <img src="/dsba-logo.svg" alt="DSBA Logo" className="h-6 w-auto" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Live Leaderboard</h1>
-                <p className="text-blue-100">Game Code: {gameCode}</p>
+                <h1 className="text-2xl font-bold">DSBA Live Leaderboard</h1>
+                <p className="text-blue-100">DSBA Game Code: {gameCode}</p>
               </div>
             </div>
-            
+
             <div className="text-right">
               <div className="flex items-center space-x-2 text-sm text-blue-100 mb-1">
                 <Clock className="h-4 w-4" />
@@ -117,14 +118,16 @@ const PublicLeaderboard = () => {
       </div>
 
       {/* Leaderboard */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-12 bg-white">
         {leaderboard.length === 0 ? (
-          <div className="text-center py-16">
-            <Trophy className="h-16 w-16 text-white/50 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-white/80 mb-2">
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-100 rounded-2xl mb-6">
+              <Trophy className="h-12 w-12 text-gray-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
               No participants yet
             </h2>
-            <p className="text-blue-100">
+            <p className="text-gray-600 text-lg">
               Participants will appear here once they join the game
             </p>
           </div>
@@ -172,8 +175,8 @@ const PublicLeaderboard = () => {
             )}
 
             {/* Full Leaderboard */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg overflow-hidden">
-              <div className="grid grid-cols-12 gap-4 p-4 bg-white/5 font-semibold text-sm">
+            <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+              <div className="grid grid-cols-12 gap-4 p-6 bg-gray-50 font-bold text-base border-b border-gray-200 text-gray-900">
                 <div className="col-span-1">Rank</div>
                 <div className="col-span-1">Avatar</div>
                 <div className="col-span-6">Participant</div>
@@ -181,12 +184,12 @@ const PublicLeaderboard = () => {
                 <div className="col-span-2">Status</div>
               </div>
               
-              <div className="divide-y divide-white/10">
+              <div className="divide-y divide-gray-200">
                 {leaderboard.map((participant, index) => (
                   <div
                     key={index}
-                    className={`grid grid-cols-12 gap-4 p-4 hover:bg-white/5 transition-colors ${
-                      index < 3 ? 'bg-white/5' : ''
+                    className={`grid grid-cols-12 gap-4 p-4 hover:bg-gray-50 transition-colors ${
+                      index < 3 ? 'bg-gray-50' : ''
                     }`}
                   >
                     <div className="col-span-1">
@@ -200,17 +203,17 @@ const PublicLeaderboard = () => {
                     </div>
                     
                     <div className="col-span-6">
-                      <h3 className="font-semibold text-white">{participant.name}</h3>
-                      <p className="text-sm text-blue-100">
+                      <h3 className="font-semibold text-gray-900">{participant.name}</h3>
+                      <p className="text-sm text-gray-600">
                         Rank #{participant.current_rank}
                       </p>
                     </div>
-                    
+
                     <div className="col-span-2">
-                      <p className="text-xl font-bold text-white">
+                      <p className="text-xl font-bold text-gray-900">
                         {participant.total_score}
                       </p>
-                      <p className="text-sm text-blue-100">points</p>
+                      <p className="text-sm text-gray-600">points</p>
                     </div>
                     
                     <div className="col-span-2">
@@ -230,39 +233,45 @@ const PublicLeaderboard = () => {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-                <div className="flex items-center space-x-3">
-                  <Users className="h-8 w-8 text-blue-300" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+              <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-blue-100 rounded-xl">
+                    <Users className="h-8 w-8 text-blue-600" />
+                  </div>
                   <div>
-                    <p className="text-2xl font-bold text-white">
+                    <p className="text-3xl font-bold text-gray-900">
                       {leaderboard.filter(p => p.status === 'active').length}
                     </p>
-                    <p className="text-blue-100">Active Players</p>
+                    <p className="text-gray-600 font-medium">Active Players</p>
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-                <div className="flex items-center space-x-3">
-                  <Target className="h-8 w-8 text-green-300" />
+
+              <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-green-100 rounded-xl">
+                    <Target className="h-8 w-8 text-green-600" />
+                  </div>
                   <div>
-                    <p className="text-2xl font-bold text-white">
+                    <p className="text-3xl font-bold text-gray-900">
                       {Math.max(...leaderboard.map(p => p.total_score))}
                     </p>
-                    <p className="text-blue-100">Highest Score</p>
+                    <p className="text-gray-600 font-medium">Highest Score</p>
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-                <div className="flex items-center space-x-3">
-                  <Trophy className="h-8 w-8 text-yellow-300" />
+
+              <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-yellow-100 rounded-xl">
+                    <Trophy className="h-8 w-8 text-yellow-600" />
+                  </div>
                   <div>
-                    <p className="text-2xl font-bold text-white">
+                    <p className="text-3xl font-bold text-gray-900">
                       {Math.round(leaderboard.reduce((sum, p) => sum + p.total_score, 0) / leaderboard.length) || 0}
                     </p>
-                    <p className="text-blue-100">Average Score</p>
+                    <p className="text-gray-600 font-medium">Average Score</p>
                   </div>
                 </div>
               </div>
@@ -271,10 +280,7 @@ const PublicLeaderboard = () => {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="text-center py-8 text-blue-200 text-sm">
-        <p>HackArena • Real-time leaderboard updates every few seconds</p>
-      </div>
+      <Footer />
     </div>
   )
 }

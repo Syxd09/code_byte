@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trophy, Mail, Lock, User, UserPlus } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Header from '../../components/Header'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -55,19 +56,25 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-              <Trophy className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <Header />
+      <div className="flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <div className="flex items-center justify-center space-x-4 mb-6">
+              <div className="p-4 bg-dsba-navy rounded-2xl shadow-lg">
+                <img src="/dsba-logo.svg" alt="DSBA Logo" className="h-10 w-auto" />
+              </div>
+              <div>
+                <h1 className="dsba-logo text-2xl">DSBA HackArena</h1>
+                <p className="text-sm text-dsba-navy font-medium">Organizer Portal</p>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">HackArena</h1>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Join DSBA HackArena</h2>
+            <p className="text-gray-600">Create your DSBA organizer account</p>
           </div>
-          <h2 className="text-xl text-gray-600">Create your organizer account</h2>
-        </div>
 
-        <div className="card p-8">
+        <div className="card p-10 shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -156,13 +163,13 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full flex items-center justify-center"
+              className="btn btn-primary w-full flex items-center justify-center py-4 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
             >
               {loading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
               ) : (
                 <>
-                  <UserPlus className="h-5 w-5 mr-2" />
+                  <UserPlus className="h-6 w-6 mr-3" />
                   Create Account
                 </>
               )}
@@ -183,6 +190,7 @@ const Register = () => {
               ← Back to home
             </Link>
           </div>
+        </div>
         </div>
       </div>
     </div>

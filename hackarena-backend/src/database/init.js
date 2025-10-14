@@ -150,6 +150,31 @@ export async function initializeDatabase() {
       // Column might already exist, ignore error
     }
 
+    // Add new columns for code evaluation configuration
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN code_languages TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN code_timeout INTEGER DEFAULT 30`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN code_memory_limit INTEGER DEFAULT 256`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE questions ADD COLUMN code_template TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
     try {
       await db.runAsync(`ALTER TABLE game_sessions ADD COLUMN paused_at DATETIME`);
     } catch (error) {
@@ -210,6 +235,67 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Add new columns for detailed code scoring
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN execution_results TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN partial_score DECIMAL(5,2) DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN code_quality_score DECIMAL(5,2) DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN performance_score DECIMAL(5,2) DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN correctness_score DECIMAL(5,2) DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN evaluation_mode TEXT`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN execution_time_ms INTEGER DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN memory_used_kb INTEGER DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN test_cases_passed INTEGER DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
+    try {
+      await db.runAsync(`ALTER TABLE answers ADD COLUMN total_test_cases INTEGER DEFAULT 0`);
+    } catch (error) {
+      // Column might already exist, ignore error
+    }
+
     // Game sessions table for real-time state
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS game_sessions (
@@ -224,6 +310,55 @@ export async function initializeDatabase() {
         answered_participants INTEGER DEFAULT 0,
         FOREIGN KEY (game_id) REFERENCES games (id),
         FOREIGN KEY (current_question_id) REFERENCES questions (id)
+      )
+    `);
+
+    // Code execution results table
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS code_execution_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        answer_id INTEGER NOT NULL,
+        language TEXT NOT NULL,
+        code TEXT NOT NULL,
+        execution_time DECIMAL(5,2),
+        memory_used INTEGER,
+        output TEXT,
+        error_message TEXT,
+        test_case_passed BOOLEAN DEFAULT FALSE,
+        test_case_input TEXT,
+        test_case_expected_output TEXT,
+        test_case_actual_output TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (answer_id) REFERENCES answers (id)
+      )
+    `);
+
+    // Supported languages table
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS supported_languages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        language_name TEXT UNIQUE NOT NULL,
+        language_code TEXT UNIQUE NOT NULL,
+        version TEXT,
+        compiler_flags TEXT,
+        timeout_multiplier DECIMAL(3,2) DEFAULT 1.0,
+        memory_multiplier DECIMAL(3,2) DEFAULT 1.0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Code templates table
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS code_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        language_id INTEGER NOT NULL,
+        template_name TEXT NOT NULL,
+        template_code TEXT NOT NULL,
+        description TEXT,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (language_id) REFERENCES supported_languages (id)
       )
     `);
 

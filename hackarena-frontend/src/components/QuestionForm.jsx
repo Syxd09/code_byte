@@ -33,7 +33,10 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
     imageUrl: '',
     crosswordGrid: [],
     crosswordClues: {},
-    crosswordSize: { rows: 10, cols: 10 }
+    crosswordSize: { rows: 10, cols: 10 },
+    timeoutLimit: 5000,
+    memoryLimit: 256,
+    codeTemplate: ''
   })
 
   useEffect(() => {
@@ -61,7 +64,10 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
         imageUrl: question.image_url || '',
         crosswordGrid: question.crossword_grid ? JSON.parse(question.crossword_grid) : [],
         crosswordClues: question.crossword_clues ? JSON.parse(question.crossword_clues) : {},
-        crosswordSize: question.crossword_size ? JSON.parse(question.crossword_size) : { rows: 10, cols: 10 }
+        crosswordSize: question.crossword_size ? JSON.parse(question.crossword_size) : { rows: 10, cols: 10 },
+        timeoutLimit: question.timeout_limit || 5000,
+        memoryLimit: question.memory_limit || 256,
+        codeTemplate: question.code_template || ''
       })
     }
   }, [question])
@@ -116,10 +122,31 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
           setActiveTab('content')
           return
         }
-      } else if (formData.evaluationMode === 'compiler' && !formData.testCases.trim()) {
-        alert('Test cases are required for compiler evaluation')
-        setActiveTab('settings')
-        return
+      } else if (formData.evaluationMode === 'compiler') {
+        if (!formData.testCases.trim()) {
+          alert('Test cases are required for compiler evaluation')
+          setActiveTab('content')
+          return
+        }
+        try {
+          const testCases = JSON.parse(formData.testCases)
+          if (!Array.isArray(testCases) || testCases.length === 0) {
+            alert('Test cases must be a non-empty array')
+            setActiveTab('content')
+            return
+          }
+          for (const testCase of testCases) {
+            if (!testCase.input || !testCase.expectedOutput) {
+              alert('Each test case must have input and expectedOutput fields')
+              setActiveTab('content')
+              return
+            }
+          }
+        } catch (error) {
+          alert('Test cases must be valid JSON')
+          setActiveTab('content')
+          return
+        }
       }
     }
 
@@ -195,19 +222,30 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
   ]
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold">
-            {question ? 'Edit Question' : 'Add New Question'}
-          </h3>
-          <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
-            <X className="h-6 w-6" />
+    <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[95vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 rounded-t-2xl px-8 py-6 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-dsba-navy rounded-xl">
+              <FileText className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {question ? 'Edit DSBA Question' : 'Add New DSBA Question'}
+              </h3>
+              <p className="text-sm text-gray-600">Create engaging questions for your hackathon</p>
+            </div>
+          </div>
+          <button
+            onClick={onCancel}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <X className="h-6 w-6 text-gray-500" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 mb-6">
+        <div className="flex bg-gray-50 rounded-xl p-2 mb-8">
           {tabs.map((tab) => {
             const Icon = tab.icon
             return (
@@ -215,13 +253,13 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center px-4 py-2 border-b-2 font-medium text-sm ${
+                className={`flex items-center px-6 py-3 rounded-lg font-semibold text-sm transition-all ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'bg-dsba-navy text-white shadow-md'
+                    : 'text-gray-600 hover:text-dsba-navy hover:bg-white'
                 }`}
               >
-                <Icon className="h-4 w-4 mr-2" />
+                <Icon className="h-5 w-5 mr-3" />
                 {tab.label}
               </button>
             )
@@ -301,6 +339,7 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                       <option value="mcq">Code Snippet MCQ (Multiple choice with code options)</option>
                       <option value="bugfix">Bug Fix Mode (Fix the buggy code)</option>
                       <option value="ide">IDE Mode (Write complete solution)</option>
+                      <option value="compiler">Compiler Mode (Test against input/output pairs)</option>
                     </select>
                   </div>
 
@@ -498,11 +537,11 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          IDE Template (Optional starter code)
+                          Code Template/Boilerplate (Optional starter code)
                         </label>
                         <Editor
-                          value={formData.ideTemplate}
-                          onValueChange={(code) => setFormData(prev => ({ ...prev, ideTemplate: code }))}
+                          value={formData.codeTemplate}
+                          onValueChange={(code) => setFormData(prev => ({ ...prev, codeTemplate: code }))}
                           highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.ideLanguage))}
                           padding={15}
                           style={{
@@ -518,7 +557,7 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Expected Solution *
+                          Expected Solution Code *
                         </label>
                         <Editor
                           value={formData.correctAnswer}
@@ -533,6 +572,69 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                             minHeight: '200px'
                           }}
                           placeholder="Enter the expected complete solution..."
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.evaluationMode === 'compiler' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Programming Language
+                        </label>
+                        <select
+                          value={formData.codeLanguage}
+                          onChange={(e) => setFormData(prev => ({ ...prev, codeLanguage: e.target.value }))}
+                          className="input w-full"
+                        >
+                          <option value="javascript">JavaScript</option>
+                          <option value="python">Python</option>
+                          <option value="java">Java</option>
+                          <option value="cpp">C++</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Code Template/Boilerplate (Optional starter code)
+                        </label>
+                        <Editor
+                          value={formData.codeTemplate}
+                          onValueChange={(code) => setFormData(prev => ({ ...prev, codeTemplate: code }))}
+                          highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.codeLanguage))}
+                          padding={15}
+                          style={{
+                            fontFamily: '"Inconsolata", "Monaco", monospace',
+                            fontSize: 14,
+                            border: '1px solid #d1d5db',
+                            borderRadius: '0.375rem',
+                            minHeight: '150px'
+                          }}
+                          placeholder="Enter starter code or template for the compiler..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Test Cases (Input/Output pairs) *
+                        </label>
+                        <textarea
+                          value={formData.testCases}
+                          onChange={(e) => setFormData(prev => ({ ...prev, testCases: e.target.value }))}
+                          className="input w-full h-48 font-mono text-sm resize-none"
+                          placeholder={`[
+ {
+   "input": "2 3",
+   "expectedOutput": "5",
+   "description": "Add two numbers"
+ },
+ {
+   "input": "10 20",
+   "expectedOutput": "30",
+   "description": "Add larger numbers"
+ }
+]`}
                         />
                       </div>
                     </div>
@@ -821,6 +923,40 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                 </div>
               </div>
 
+              {formData.questionType === 'code' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Execution Timeout (ms)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.timeoutLimit}
+                      onChange={(e) => setFormData(prev => ({ ...prev, timeoutLimit: parseInt(e.target.value) || 5000 }))}
+                      className="input w-full"
+                      min="1000"
+                      max="30000"
+                      step="1000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Memory Limit (MB)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.memoryLimit}
+                      onChange={(e) => setFormData(prev => ({ ...prev, memoryLimit: parseInt(e.target.value) || 256 }))}
+                      className="input w-full"
+                      min="64"
+                      max="1024"
+                      step="64"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Hint (Optional)
@@ -855,7 +991,7 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                     value={formData.testCases}
                     onChange={(e) => setFormData(prev => ({ ...prev, testCases: e.target.value }))}
                     className="input w-full h-32 font-mono text-sm resize-none"
-                    placeholder='[{"input": "2 3", "expected": "5"}, {"input": "10 20", "expected": "30"}]'
+                    placeholder='[{"input": "2 3", "expectedOutput": "5", "description": "Add two numbers"}, {"input": "10 20", "expectedOutput": "30", "description": "Add larger numbers"}]'
                   />
                 </div>
               )}
@@ -876,17 +1012,17 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
             </div>
           )}
 
-          <div className="flex space-x-3 pt-4">
+          <div className="flex space-x-4 pt-6 border-t border-gray-200">
             <button
               type="submit"
-              className="btn btn-primary flex-1"
+              className="btn btn-primary flex-1 py-3 text-lg font-semibold shadow-lg hover:shadow-xl"
             >
               {question ? 'Update Question' : 'Add Question'}
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="btn btn-secondary flex-1"
+              className="btn btn-secondary flex-1 py-3 text-lg font-semibold hover:bg-gray-100"
             >
               Cancel
             </button>

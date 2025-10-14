@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom'
 import { Trophy, Target, Clock, TrendingUp, ArrowLeft, BarChart3 } from 'lucide-react'
 import { api } from '../../utils/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import Header from '../../components/Header'
+import Footer from '../../components/Footer'
 import toast from 'react-hot-toast'
 
 const PostGameAnalytics = () => {
+  console.log('PostGameAnalytics component rendered')
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -45,26 +48,24 @@ const PostGameAnalytics = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="text-gray-600 hover:text-gray-900">
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Your Performance Analytics</h1>
-                <p className="text-sm text-gray-600">Game completed • Final Rank #{participant.finalRank}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-2xl">{participant.avatar}</span>
-              <span className="font-medium">{participant.name}</span>
+      <Header />
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <Link to="/" className="text-gray-600 hover:text-gray-900">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Your DSBA Performance Analytics</h1>
+              <p className="text-sm text-gray-600">DSBA Game completed • Final Rank #{participant.finalRank}</p>
             </div>
           </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-2xl">{participant.avatar}</span>
+            <span className="font-medium">{participant.name}</span>
+          </div>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Overview Stats */}
@@ -224,6 +225,7 @@ const PostGameAnalytics = () => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   )
 }

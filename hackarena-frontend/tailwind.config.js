@@ -9,7 +9,7 @@ export default {
       colors: {
         border: '#e5e7eb',
         background: '#ffffff',
-        ring: '#2563eb',
+        ring: '#1e40af',
         card: {
           foreground: '#111827'
         },
@@ -19,10 +19,17 @@ export default {
         primary: {
           50: '#eff6ff',
           100: '#dbeafe',
-          500: '#3b82f6',
-          600: '#2563eb',
+          500: '#1e40af',
+          600: '#1e40af',
           700: '#1d4ed8',
           900: '#1e3a8a'
+        },
+        dsba: {
+          navy: '#1e40af',
+          gold: '#fbbf24',
+          white: '#ffffff',
+          gray: '#6b7280',
+          light: '#f8fafc'
         }
       },
       animation: {

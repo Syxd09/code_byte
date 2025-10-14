@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
+import { BarChart3, TrendingUp } from 'lucide-react'
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0']
 
@@ -22,60 +23,77 @@ const AnalyticsCharts = ({ data, type }) => {
     ]
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Score Distribution */}
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold mb-4">Score Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="card p-8 shadow-lg hover:shadow-xl transition-shadow">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-dsba-navy rounded-lg">
+              <BarChart3 className="h-6 w-6 text-white" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Score Distribution</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
             <BarChart data={scoreData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="range" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill="#8884d8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="range" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e40af',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white'
+                }}
+              />
+              <Bar dataKey="count" fill="#1e40af" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Overall Statistics */}
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold mb-4">Game Overview</h3>
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <span>Total Participants:</span>
-              <span className="font-semibold">{overview.totalParticipants}</span>
+        <div className="card p-8 shadow-lg hover:shadow-xl transition-shadow">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-dsba-gold rounded-lg">
+              <TrendingUp className="h-6 w-6 text-white" />
             </div>
-            <div className="flex justify-between">
-              <span>Total Questions:</span>
-              <span className="font-semibold">{overview.totalQuestions}</span>
+            <h3 className="text-xl font-bold text-gray-900">DSBA Game Overview</h3>
+          </div>
+          <div className="space-y-5">
+            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-700 font-medium">Total Participants:</span>
+              <span className="font-bold text-dsba-navy text-lg">{overview.totalParticipants}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Overall Accuracy:</span>
-              <span className="font-semibold">{overview.overallAccuracy}%</span>
+            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-700 font-medium">Total Questions:</span>
+              <span className="font-bold text-dsba-navy text-lg">{overview.totalQuestions}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Average Completion Time:</span>
-              <span className="font-semibold">{overview.averageCompletionTime}s</span>
+            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+              <span className="text-gray-700 font-medium">Overall Accuracy:</span>
+              <span className="font-bold text-blue-700 text-lg">{overview.overallAccuracy}%</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-700 font-medium">Average Completion Time:</span>
+              <span className="font-bold text-dsba-navy text-lg">{overview.averageCompletionTime}s</span>
             </div>
             {game.duration && (
-              <div className="flex justify-between">
-                <span>Game Duration:</span>
-                <span className="font-semibold">{Math.round(game.duration)} minutes</span>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700 font-medium">Game Duration:</span>
+                <span className="font-bold text-dsba-navy text-lg">{Math.round(game.duration)} minutes</span>
               </div>
             )}
             {game.qualificationType && game.qualificationType !== 'none' && (
               <>
-                <div className="flex justify-between">
-                  <span>Qualification Type:</span>
-                  <span className="font-semibold">
+                <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                  <span className="text-gray-700 font-medium">Qualification Type:</span>
+                  <span className="font-bold text-yellow-700 text-lg">
                     {game.qualificationType === 'top_n' && `Top ${game.qualificationThreshold}`}
                     {game.qualificationType === 'top_percentage' && `Top ${game.qualificationThreshold}%`}
                     {game.qualificationType === 'custom_threshold' && `Score ≥ ${game.qualificationThreshold}`}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Qualified Participants:</span>
-                  <span className="font-semibold">{overview.qualificationStats.qualifiedCount} ({overview.qualificationStats.qualificationRate}%)</span>
+                <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                  <span className="text-gray-700 font-medium">Qualified Participants:</span>
+                  <span className="font-bold text-green-700 text-lg">{overview.qualificationStats.qualifiedCount} ({overview.qualificationStats.qualificationRate}%)</span>
                 </div>
               </>
             )}

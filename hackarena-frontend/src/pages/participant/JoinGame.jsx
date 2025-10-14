@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Trophy, Users, QrCode, ArrowRight, Loader2 } from 'lucide-react'
 import { api } from '../../utils/api'
+import Header from '../../components/Header'
+import Footer from '../../components/Footer'
 import toast from 'react-hot-toast'
 
 const JoinGame = () => {
@@ -73,19 +75,21 @@ const JoinGame = () => {
   }
 
   return (
-    <div className="min-h-screen participant-interface flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-lg">
-            <Trophy className="h-8 w-8 text-primary-600" />
+    <div className="min-h-screen bg-gradient-to-br from-dsba-navy via-blue-900 to-indigo-900">
+      <Header />
+      <div className="participant-interface flex items-center justify-center p-4 min-h-screen">
+        <div className="max-w-md w-full">
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl mb-6 shadow-2xl">
+              <img src="/dsba-logo.svg" alt="DSBA Logo" className="h-10 w-auto" />
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-3">DSBA HackArena</h1>
+            <p className="text-blue-100 text-lg">Join the DSBA competition!</p>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">HackArena</h1>
-          <p className="text-blue-100">Join the competition!</p>
-        </div>
 
         {/* Join Form */}
-        <div className="card p-8 shadow-2xl">
+        <div className="card p-10 shadow-2xl bg-white/95 backdrop-blur-sm border-0">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Join Game</h2>
             <p className="text-gray-600">Enter your details to participate</p>
@@ -141,14 +145,14 @@ const JoinGame = () => {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full h-12 text-lg flex items-center justify-center"
+              className="btn btn-primary w-full h-14 text-xl font-bold flex items-center justify-center shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all"
             >
               {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
                   Join Game
-                  <ArrowRight className="h-5 w-5 ml-2" />
+                  <ArrowRight className="h-6 w-6 ml-3" />
                 </>
               )}
             </button>
@@ -181,7 +185,9 @@ const JoinGame = () => {
             </div>
           </div>
         </div>
+        </div>
       </div>
+      <Footer />
     </div>
   )
 }

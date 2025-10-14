@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { Trophy, Mail, Lock, LogIn } from 'lucide-react'
+import { Mail, Lock, LogIn } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Header from '../../components/Header'
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +12,7 @@ const Login = () => {
   })
   const [loading, setLoading] = useState(false)
   
-  const { login, googleLogin } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -41,49 +42,18 @@ const Login = () => {
     }))
   }
 
-  const handleGoogleLogin = async (response) => {
-    try {
-      const result = await googleLogin(response.credential)
-
-      if (result.success) {
-        toast.success('Login successful!')
-        navigate('/dashboard')
-      } else {
-        toast.error(result.error)
-      }
-    } catch (error) {
-      toast.error('Google authentication failed')
-    }
-  }
-
-  useEffect(() => {
-    if (window.google) {
-      window.google.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-        callback: handleGoogleLogin
-      })
-
-      window.google.accounts.id.renderButton(
-        document.getElementById('google-signin-button'),
-        { theme: 'outline', size: 'large' }
-      )
-    }
-  }, [])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-              <Trophy className="h-6 w-6 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">HackArena</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <Header />
+      <div className="flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h2>
+            <p className="text-gray-600">Sign in to your DSBA organizer account</p>
           </div>
-          <h2 className="text-xl text-gray-600">Sign in to your organizer account</h2>
-        </div>
 
-        <div className="card p-8">
+        <div className="card p-10 shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -130,33 +100,19 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full flex items-center justify-center"
+              className="btn btn-primary w-full flex items-center justify-center py-4 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
             >
               {loading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
               ) : (
                 <>
-                  <LogIn className="h-5 w-5 mr-2" />
+                  <LogIn className="h-6 w-6 mr-3" />
                   Sign In
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <div id="google-signin-button" className="flex justify-center"></div>
-            </div>
-          </div>
         </div>
 
         <>
@@ -175,6 +131,7 @@ const Login = () => {
             </Link>
           </div>
         </>
+        </div>
       </div>
     </div>
   )

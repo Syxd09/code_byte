@@ -2,7 +2,12 @@ module.exports = {
   testEnvironment: 'node',
   preset: null,
   transform: {
-    '^.+\\.js$': ['babel-jest', { presets: [['@babel/preset-env', { targets: { node: 'current' } }]] }],
+    '^.+\\.js$': ['babel-jest', {
+      presets: [['@babel/preset-env', {
+        targets: { node: 'current' },
+        modules: false
+      }]]
+    }],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(supertest)/)'

@@ -96,7 +96,7 @@ describe('QuestionForm Component', () => {
     );
   });
 
-  it('handles coding question with AI evaluation', async () => {
+  it('handles coding question with IDE evaluation', async () => {
     const user = userEvent.setup();
     render(<QuestionForm onSave={mockOnSave} onCancel={mockOnCancel} />);
 
@@ -113,10 +113,10 @@ describe('QuestionForm Component', () => {
 
     // Change to IDE Mode
     const evalSelect = screen.getByDisplayValue('Code Snippet MCQ (Multiple choice with code options)');
-    await user.selectOptions(evalSelect, 'ide');
+    await user.selectOptions(evalSelect, 'IDE Mode (Write complete solution)');
 
-    // Should show IDE template
-    expect(screen.getByText('IDE Template (Optional starter code)')).toBeInTheDocument();
+    // Should show code template
+    expect(screen.getByText('Code Template/Boilerplate (Optional starter code)')).toBeInTheDocument();
 
     // Fill required fields
     const questionInput = screen.getByLabelText(/Question Text/);
@@ -146,21 +146,23 @@ describe('QuestionForm Component', () => {
     const typeSelect = screen.getByDisplayValue('mcq');
     await user.selectOptions(typeSelect, 'code');
 
-    // Switch to Settings tab
-    const settingsTab = screen.getByText('Settings');
-    await user.click(settingsTab);
+    // Switch to Question Content tab
+    const contentTab = screen.getByText('Question Content');
+    await user.click(contentTab);
+
+    // Change to compiler mode
+    const evalSelect = screen.getByDisplayValue('Code Snippet MCQ (Multiple choice with code options)');
+    await user.selectOptions(evalSelect, 'Compiler Mode (Test against input/output pairs)');
 
     // Should show test cases field
-    expect(screen.getByText('Test Cases (JSON format)')).toBeInTheDocument();
+    expect(screen.getByText('Test Cases (Input/Output pairs) *')).toBeInTheDocument();
 
     // Fill required fields and test cases
     const questionInput = screen.getByLabelText(/Question Text/);
-    const correctAnswerInput = screen.getByLabelText(/Correct Answer/);
-    const testCasesTextarea = screen.getByPlaceholderText(/\[{"input": "2 3", "expected": "5"}\]/);
+    const testCasesTextarea = screen.getByPlaceholderText(/\[[\s\S]*"input": "2 3"[\s\S]*"expectedOutput": "5"[\s\S]*\]/);
 
     await user.type(questionInput, 'Write a function to add two numbers');
-    await user.type(correctAnswerInput, 'function add(a, b) { return a + b; }');
-    await user.type(testCasesTextarea, '[{"input": "2 3", "expected": "5"}, {"input": "10 20", "expected": "30"}]');
+    await user.type(testCasesTextarea, '[{"input": "2 3", "expectedOutput": "5", "description": "Add two numbers"}, {"input": "10 20", "expectedOutput": "30", "description": "Add larger numbers"}]');
 
     const submitButton = screen.getByRole('button', { name: /Add Question/i });
     await user.click(submitButton);
@@ -169,8 +171,8 @@ describe('QuestionForm Component', () => {
       expect.objectContaining({
         questionText: 'Write a function to add two numbers',
         questionType: 'code',
-        evaluationMode: 'mcq', // Default mode
-        testCases: '[{"input": "2 3", "expected": "5"}, {"input": "10 20", "expected": "30"}]'
+        evaluationMode: 'compiler',
+        testCases: '[{"input": "2 3", "expectedOutput": "5", "description": "Add two numbers"}, {"input": "10 20", "expectedOutput": "30", "description": "Add larger numbers"}]'
       })
     );
   });

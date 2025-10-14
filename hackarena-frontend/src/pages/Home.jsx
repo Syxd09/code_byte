@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom'
-import { 
-  Trophy, 
-  Users, 
-  Clock, 
-  Shield, 
-  BarChart3, 
+import {
+  Trophy,
+  Users,
+  Clock,
+  Shield,
+  BarChart3,
   Zap,
   ArrowRight,
   Play,
   UserPlus
 } from 'lucide-react'
+import Header from '../components/Header'
+import Footer from '../components/Footer'
 
 const Home = () => {
   const features = [
@@ -47,78 +49,61 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <Trophy className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">HackArena</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link to="/join" className="text-gray-600 hover:text-gray-900">
-                Join Game
-              </Link>
-              <Link to="/login" className="btn btn-secondary">
-                Login
-              </Link>
-              <Link to="/register" className="btn btn-primary">
-                Get Started
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Header />
 
       {/* Hero Section */}
-      <section className="relative game-gradient text-white py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl font-bold mb-6">
-            The Ultimate Inter-College
-            <span className="block text-yellow-300">Hackathon Platform</span>
+      <section className="relative dsba-hero-gradient text-white py-24 px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative max-w-5xl mx-auto text-center">
+          <div className="inline-flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-2 mb-8">
+            <img src="/dsba-logo.svg" alt="DSBA Logo" className="h-6 w-auto" />
+            <span className="text-sm font-medium">Dayananda Sagar Business Academy</span>
+          </div>
+          <h1 className="text-6xl font-bold mb-6 leading-tight">
+            DSBA Inter-College
+            <span className="block dsba-accent text-7xl font-extrabold">Hackathon Platform</span>
           </h1>
-          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Host live technical competitions with real-time scoring, anti-cheat protection, 
+          <p className="text-xl text-blue-100 mb-10 max-w-3xl mx-auto leading-relaxed">
+            Host live technical competitions with real-time scoring, anti-cheat protection,
             and support for 500+ concurrent participants. Perfect for college fests and tech events.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register" className="btn bg-white text-primary-600 hover:bg-gray-100 text-lg px-8 py-3">
-              <UserPlus className="h-5 w-5 mr-2" />
+          <div className="flex flex-col sm:flex-row gap-6 justify-center">
+            <Link to="/register" className="btn bg-white text-dsba-navy hover:bg-gray-100 text-lg px-10 py-4 shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all">
+              <UserPlus className="h-6 w-6 mr-3" />
               Create Account
             </Link>
-            <Link to="/join" className="btn bg-transparent border-2 border-white text-white hover:bg-white hover:text-primary-600 text-lg px-8 py-3">
-              <Play className="h-5 w-5 mr-2" />
+            <Link to="/join" className="btn bg-transparent border-2 border-white text-white hover:bg-white hover:text-dsba-navy text-lg px-10 py-4 shadow-xl hover:shadow-white/25 transform hover:scale-105 transition-all">
+              <Play className="h-6 w-6 mr-3" />
               Join Game
             </Link>
           </div>
         </div>
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent"></div>
       </section>
 
       {/* Features Section */}
-      <section className="py-20 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+      <section className="py-24 px-4 bg-gradient-to-br from-gray-50 to-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-20">
+            <h2 className="text-4xl font-bold text-gray-900 mb-6">
               Everything You Need for Live Competitions
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Designed specifically for college hackathons and technical events with 
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              Designed specifically for college hackathons and technical events with
               enterprise-grade reliability and real-time performance.
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="card p-6 hover:shadow-lg transition-shadow">
-                <div className="text-primary-600 mb-4">
+              <div key={index} className="card p-8 hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-dsba-navy">
+                <div className="text-dsba-navy mb-6 p-3 bg-blue-50 rounded-xl w-fit">
                   {feature.icon}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
                   {feature.title}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-gray-600 text-lg leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -186,43 +171,26 @@ const Home = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-primary-600 text-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-6">
-            Ready to Host Your Next Hackathon?
+      <section className="py-24 px-4 bg-gradient-to-br from-dsba-navy via-blue-800 to-blue-900 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/30"></div>
+        <div className="relative max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold mb-6">
+            Ready to Host Your Next DSBA Hackathon?
           </h2>
-          <p className="text-xl text-primary-100 mb-8">
-            Join hundreds of organizers already using HackArena for their technical events.
+          <p className="text-xl text-blue-100 mb-10 leading-relaxed">
+            Join hundreds of organizers already using DSBA HackArena for their technical events.
           </p>
-          <Link 
-            to="/register" 
-            className="btn bg-white text-primary-600 hover:bg-gray-100 text-lg px-8 py-3 inline-flex items-center"
+          <Link
+            to="/register"
+            className="btn bg-white text-dsba-navy hover:bg-gray-100 text-xl px-12 py-4 inline-flex items-center shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all font-bold"
           >
             Start Free Today
-            <ArrowRight className="h-5 w-5 ml-2" />
+            <ArrowRight className="h-6 w-6 ml-3" />
           </Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <Trophy className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">HackArena</span>
-            </div>
-            <p className="mb-4">
-              Empowering college hackathons with real-time competition technology
-            </p>
-            <p className="text-sm">
-              Proposed by Dayananda Sagar Business Academy (IT Club)
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
