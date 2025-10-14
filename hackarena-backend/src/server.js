@@ -44,7 +44,9 @@ const io = new Server(server, {
 
 // Middleware
 app.use(cors({
-  origin: true,
+  origin: 'https://code-byte-navy.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 app.use(express.json());
