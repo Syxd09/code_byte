@@ -1,3 +1,18 @@
+// Diagnostic logging for platform compatibility
+console.log('Node.js version:', process.version);
+console.log('Platform:', process.platform);
+console.log('Architecture:', process.arch);
+console.log('Environment:', process.env.NODE_ENV || 'development');
+
+// Check for sqlite3 native module
+try {
+  const sqlite3 = await import('sqlite3');
+  console.log('SQLite3 module loaded successfully');
+  console.log('SQLite3 version:', sqlite3.default?.VERSION || 'unknown');
+} catch (error) {
+  console.error('Failed to load SQLite3 module:', error.message);
+  console.error('This may indicate a platform compatibility issue with native binaries');
+}
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';

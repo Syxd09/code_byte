@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/server.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "database/**",
+          "src/**"
+        ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "src/server.js"
+    }
+  ],
+  "functions": {
+    "src/server.js": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "VERCEL": "1"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production",
+      "VERCEL": "1"
+    }
+  },
+  "installCommand": "npm ci && npm rebuild sqlite3"
+}

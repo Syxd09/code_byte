@@ -1,7 +1,21 @@
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const db = new sqlite3.Database(process.env.DATABASE_URL || './database/hackarena.db');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Handle Vercel deployment path
+const isVercel = process.env.VERCEL === '1';
+const dbPath = isVercel
+  ? '/tmp/hackarena.db'  // Vercel writable directory
+  : process.env.DATABASE_URL || path.join(__dirname, '../../database/hackarena.db');
+
+console.log('Database path:', dbPath);
+console.log('Is Vercel environment:', isVercel);
+
+const db = new sqlite3.Database(dbPath);
 
 // Promisify database methods
 db.getAsync = promisify(db.get.bind(db));

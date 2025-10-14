@@ -10,7 +10,8 @@
     "migrate": "node src/database/migrate.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "postinstall": "npm rebuild sqlite3"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
