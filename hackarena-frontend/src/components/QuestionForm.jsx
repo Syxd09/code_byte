@@ -1,5 +1,6 @@
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react'
-import { X, Plus, Minus, FileText, Settings, Code } from 'lucide-react'
+import { X, Plus, Minus, FileText, Settings, Code, HelpCircle, AlertCircle, CheckCircle, Eye, EyeOff, Loader, Sparkles, BookOpen, Target, Clock, Zap } from 'lucide-react'
 import Editor from 'react-simple-code-editor'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-clike'
@@ -9,35 +10,38 @@ import 'prismjs/components/prism-java'
 import 'prismjs/themes/prism.css'
 
 const QuestionForm = ({ question = null, onSave, onCancel }) => {
-  const [activeTab, setActiveTab] = useState('basic')
-  const [formData, setFormData] = useState({
-    questionText: '',
-    questionType: 'mcq',
-    codeSnippet: '',
-    codeLanguage: 'javascript',
-    bugFixCode: '',
-    bugFixInstructions: '',
-    ideTemplate: '',
-    ideLanguage: 'javascript',
-    options: ['', '', '', ''],
-    correctAnswer: '',
-    hint: '',
-    hintPenalty: 10,
-    timeLimit: 60,
-    marks: 10,
-    difficulty: 'medium',
-    explanation: '',
-    evaluationMode: 'mcq',
-    testCases: '',
-    aiValidationSettings: '',
-    imageUrl: '',
-    crosswordGrid: [],
-    crosswordClues: {},
-    crosswordSize: { rows: 10, cols: 10 },
-    timeoutLimit: 5000,
-    memoryLimit: 256,
-    codeTemplate: ''
-  })
+   const [activeTab, setActiveTab] = useState('basic')
+   const [isSubmitting, setIsSubmitting] = useState(false)
+   const [validationErrors, setValidationErrors] = useState({})
+   const [showPreview, setShowPreview] = useState(false)
+   const [formData, setFormData] = useState({
+     questionText: '',
+     questionType: 'mcq',
+     codeSnippet: '',
+     codeLanguage: 'javascript',
+     bugFixCode: '',
+     bugFixInstructions: '',
+     ideTemplate: '',
+     ideLanguage: 'javascript',
+     options: ['', '', '', ''],
+     correctAnswer: '',
+     hint: '',
+     hintPenalty: 10,
+     timeLimit: 60,
+     marks: 10,
+     difficulty: 'medium',
+     explanation: '',
+     evaluationMode: 'mcq',
+     testCases: '',
+     aiValidationSettings: '',
+     imageUrl: '',
+     crosswordGrid: [],
+     crosswordClues: {},
+     crosswordSize: { rows: 10, cols: 10 },
+     timeoutLimit: 5000,
+     memoryLimit: 256,
+     codeTemplate: ''
+   })
 
   useEffect(() => {
     if (question) {
@@ -72,111 +76,112 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
     }
   }, [question])
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
+  const validateForm = () => {
+    const errors = {}
 
-    // Enhanced Validation
+    // Basic validation
     if (!formData.questionText.trim()) {
-      alert('Question text is required')
-      setActiveTab('basic')
-      return
+      errors.questionText = 'Question text is required'
     }
 
     if (formData.questionType === 'mcq' && formData.options.filter(opt => opt.trim()).length < 2) {
-      alert('At least 2 options are required for MCQ')
-      setActiveTab('content')
-      return
+      errors.options = 'At least 2 options are required for MCQ'
     }
 
     if (formData.questionType === 'code') {
       if (formData.evaluationMode === 'mcq') {
         if (!formData.codeSnippet.trim()) {
-          alert('Code snippet is required for Code Snippet MCQ')
-          setActiveTab('content')
-          return
+          errors.codeSnippet = 'Code snippet is required for Code Snippet MCQ'
         }
         if (formData.options.filter(opt => opt.trim()).length < 2) {
-          alert('At least 2 code options are required')
-          setActiveTab('content')
-          return
+          errors.codeOptions = 'At least 2 code options are required'
         }
         if (!formData.correctAnswer.trim()) {
-          alert('Correct answer must be selected')
-          setActiveTab('content')
-          return
+          errors.correctAnswer = 'Correct answer must be selected'
         }
       } else if (formData.evaluationMode === 'bugfix') {
         if (!formData.bugFixCode.trim()) {
-          alert('Buggy code is required for Bug Fix Mode')
-          setActiveTab('content')
-          return
+          errors.bugFixCode = 'Buggy code is required for Bug Fix Mode'
         }
         if (!formData.correctAnswer.trim()) {
-          alert('Expected fixed code is required')
-          setActiveTab('content')
-          return
+          errors.correctAnswer = 'Expected fixed code is required'
         }
       } else if (formData.evaluationMode === 'ide') {
         if (!formData.correctAnswer.trim()) {
-          alert('Expected solution code is required for IDE Mode')
-          setActiveTab('content')
-          return
+          errors.correctAnswer = 'Expected solution code is required for IDE Mode'
         }
       } else if (formData.evaluationMode === 'compiler') {
         if (!formData.testCases.trim()) {
-          alert('Test cases are required for compiler evaluation')
-          setActiveTab('content')
-          return
-        }
-        try {
-          const testCases = JSON.parse(formData.testCases)
-          if (!Array.isArray(testCases) || testCases.length === 0) {
-            alert('Test cases must be a non-empty array')
-            setActiveTab('content')
-            return
-          }
-          for (const testCase of testCases) {
-            if (!testCase.input || !testCase.expectedOutput) {
-              alert('Each test case must have input and expectedOutput fields')
-              setActiveTab('content')
-              return
+          errors.testCases = 'Test cases are required for compiler evaluation'
+        } else {
+          try {
+            const testCases = JSON.parse(formData.testCases)
+            if (!Array.isArray(testCases) || testCases.length === 0) {
+              errors.testCases = 'Test cases must be a non-empty array'
+            } else {
+              for (let i = 0; i < testCases.length; i++) {
+                const testCase = testCases[i]
+                if (!testCase.input || !testCase.expectedOutput) {
+                  errors.testCases = `Test case ${i + 1} must have input and expectedOutput fields`
+                  break
+                }
+              }
             }
+          } catch (error) {
+            errors.testCases = 'Test cases must be valid JSON'
           }
-        } catch (error) {
-          alert('Test cases must be valid JSON')
-          setActiveTab('content')
-          return
         }
       }
     }
 
     if (formData.questionType === 'image' && !formData.imageUrl) {
-      alert('Please upload an image for image-based questions')
-      setActiveTab('content')
-      return
+      errors.imageUrl = 'Please upload an image for image-based questions'
     }
 
     if (formData.questionType === 'crossword') {
       if (!formData.crosswordGrid || formData.crosswordGrid.length === 0) {
-        alert('Crossword grid is required')
-        setActiveTab('content')
-        return
+        errors.crosswordGrid = 'Crossword grid is required'
       }
       if (!formData.crosswordClues || Object.keys(formData.crosswordClues).length === 0) {
-        alert('Crossword clues are required')
-        setActiveTab('content')
-        return
+        errors.crosswordClues = 'Crossword clues are required'
       }
     }
 
     // Check for other question types that require correct answer
     if (['mcq', 'truefalse', 'short', 'fill'].includes(formData.questionType) && !formData.correctAnswer.trim()) {
-      alert('Correct answer is required')
-      setActiveTab('content')
+      errors.correctAnswer = 'Correct answer is required'
+    }
+
+    return errors
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    const errors = validateForm()
+    setValidationErrors(errors)
+
+    if (Object.keys(errors).length > 0) {
+      // Find the first tab with errors
+      const errorFields = Object.keys(errors)
+      if (errorFields.includes('questionText') || errorFields.includes('questionType') || errorFields.includes('difficulty')) {
+        setActiveTab('basic')
+      } else {
+        setActiveTab('content')
+      }
+      setIsSubmitting(false)
       return
     }
 
-    onSave(formData)
+    try {
+      await onSave(formData)
+    } catch (error) {
+      console.error('Error saving question:', error)
+      setValidationErrors({ submit: 'Failed to save question. Please try again.' })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const addOption = () => {
@@ -216,9 +221,9 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
   }
 
   const tabs = [
-    { id: 'basic', label: 'Basic Info', icon: FileText },
-    { id: 'content', label: 'Question Content', icon: Code },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'basic', label: 'Basic Info', icon: FileText, description: 'Question text and type' },
+    { id: 'content', label: 'Question Content', icon: Code, description: 'Answers and code content' },
+    { id: 'settings', label: 'Settings', icon: Settings, description: 'Timing and scoring' }
   ]
 
   return (
@@ -248,19 +253,32 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
         <div className="flex bg-gray-50 rounded-xl p-2 mb-8">
           {tabs.map((tab) => {
             const Icon = tab.icon
+            const hasErrors = activeTab !== tab.id && Object.keys(validationErrors).some(key => {
+              if (tab.id === 'basic') return ['questionText', 'questionType', 'difficulty'].includes(key)
+              if (tab.id === 'content') return ['options', 'codeSnippet', 'codeOptions', 'correctAnswer', 'bugFixCode', 'testCases', 'imageUrl', 'crosswordGrid', 'crosswordClues'].includes(key)
+              if (tab.id === 'settings') return ['timeLimit', 'marks', 'hintPenalty'].includes(key)
+              return false
+            })
             return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center px-6 py-3 rounded-lg font-semibold text-sm transition-all ${
+                className={`flex items-center px-6 py-3 rounded-lg font-semibold text-sm transition-all relative ${
                   activeTab === tab.id
                     ? 'bg-dsba-navy text-white shadow-md'
                     : 'text-gray-600 hover:text-dsba-navy hover:bg-white'
                 }`}
+                aria-label={`${tab.label}: ${tab.description}`}
               >
                 <Icon className="h-5 w-5 mr-3" />
-                {tab.label}
+                <div className="text-left">
+                  <div>{tab.label}</div>
+                  <div className="text-xs opacity-75">{tab.description}</div>
+                </div>
+                {hasErrors && (
+                  <AlertCircle className="h-4 w-4 ml-2 text-red-500" />
+                )}
               </button>
             )
           })}
@@ -271,20 +289,38 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
           {activeTab === 'basic' && (
             <div className="space-y-6">
               <div>
-                <label htmlFor="questionText" className="block text-sm font-medium text-gray-700 mb-2">
-                  Question Text *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="questionText" className="block text-sm font-medium text-gray-700">
+                    Question Text *
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <HelpCircle className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs text-gray-500">Be clear and specific</span>
+                  </div>
+                </div>
                 <textarea
                   id="questionText"
                   value={formData.questionText}
-                  onChange={(e) => setFormData(prev => ({ ...prev, questionText: e.target.value }))}
-                  className="input w-full h-24 resize-none"
-                  placeholder="Enter your question..."
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, questionText: e.target.value }))
+                    if (validationErrors.questionText) {
+                      setValidationErrors(prev => ({ ...prev, questionText: undefined }))
+                    }
+                  }}
+                  className={`input w-full h-24 resize-none ${validationErrors.questionText ? 'border-red-500 focus:border-red-500' : ''}`}
+                  placeholder="Enter your question... (e.g., 'What is the output of the following code?')"
                   required
+                  aria-describedby={validationErrors.questionText ? "questionText-error" : undefined}
                 />
+                {validationErrors.questionText && (
+                  <p id="questionText-error" className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {validationErrors.questionText}
+                  </p>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Question Type
@@ -293,31 +329,58 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                     value={formData.questionType}
                     onChange={(e) => setFormData(prev => ({ ...prev, questionType: e.target.value }))}
                     className="input w-full"
+                    aria-label="Select question type"
                   >
-                    <option value="mcq">Multiple Choice</option>
-                    <option value="fill">Fill in the Blank</option>
-                    <option value="code">Code Question</option>
-                    <option value="truefalse">True/False</option>
-                    <option value="short">Short Answer</option>
-                    <option value="image">Image-based</option>
-                    <option value="crossword">Crossword Puzzle</option>
+                    <option value="mcq">📝 Multiple Choice</option>
+                    <option value="fill">✏️ Fill in the Blank</option>
+                    <option value="code">💻 Code Question</option>
+                    <option value="truefalse">✓ True/False</option>
+                    <option value="short">📄 Short Answer</option>
+                    <option value="image">🖼️ Image-based</option>
+                    <option value="crossword">🔤 Crossword Puzzle</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Difficulty
+                    Difficulty Level
                   </label>
                   <select
                     value={formData.difficulty}
                     onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value }))}
                     className="input w-full"
+                    aria-label="Select difficulty level"
                   >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+                    <option value="easy">🟢 Easy (Beginner friendly)</option>
+                    <option value="medium">🟡 Medium (Intermediate)</option>
+                    <option value="hard">🔴 Hard (Advanced)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Preview Toggle */}
+              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center space-x-3">
+                  <Eye className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">Live Preview</p>
+                    <p className="text-sm text-blue-700">See how participants will view this question</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    showPreview ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                  aria-label={showPreview ? "Hide preview" : "Show preview"}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      showPreview ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           )}
@@ -344,75 +407,113 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                   </div>
 
                   {formData.evaluationMode === 'mcq' && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Code Snippet
-                        </label>
-                        <select
-                          value={formData.codeLanguage}
-                          onChange={(e) => setFormData(prev => ({ ...prev, codeLanguage: e.target.value }))}
-                          className="input w-full mb-2"
-                        >
-                          <option value="javascript">JavaScript</option>
-                          <option value="python">Python</option>
-                          <option value="java">Java</option>
-                          <option value="cpp">C++</option>
-                        </select>
-                        <Editor
-                          value={formData.codeSnippet}
-                          onValueChange={(code) => setFormData(prev => ({ ...prev, codeSnippet: code }))}
-                          highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.codeLanguage))}
-                          padding={15}
-                          style={{
-                            fontFamily: '"Inconsolata", "Monaco", monospace',
-                            fontSize: 14,
-                            border: '1px solid #d1d5db',
-                            borderRadius: '0.375rem',
-                            minHeight: '120px'
-                          }}
-                          placeholder="Enter the code snippet for the question..."
-                        />
-                      </div>
+                     <div className="space-y-4">
+                       <div>
+                         <div className="flex items-center justify-between mb-2">
+                           <label className="block text-sm font-medium text-gray-700">
+                             Code Snippet *
+                           </label>
+                           <div className="flex items-center space-x-2">
+                             <BookOpen className="h-4 w-4 text-gray-400" />
+                             <span className="text-xs text-gray-500">Participants will see this code</span>
+                           </div>
+                         </div>
+                         <select
+                           value={formData.codeLanguage}
+                           onChange={(e) => setFormData(prev => ({ ...prev, codeLanguage: e.target.value }))}
+                           className="input w-full mb-2"
+                           aria-label="Select programming language for code snippet"
+                         >
+                           <option value="javascript">🟨 JavaScript</option>
+                           <option value="python">🐍 Python</option>
+                           <option value="java">☕ Java</option>
+                           <option value="cpp">⚡ C++</option>
+                         </select>
+                         <div className="relative">
+                           <Editor
+                             value={formData.codeSnippet}
+                             onValueChange={(code) => {
+                               setFormData(prev => ({ ...prev, codeSnippet: code }))
+                               if (validationErrors.codeSnippet) {
+                                 setValidationErrors(prev => ({ ...prev, codeSnippet: undefined }))
+                               }
+                             }}
+                             highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.codeLanguage))}
+                             padding={15}
+                             style={{
+                               fontFamily: '"Inconsolata", "Monaco", monospace',
+                               fontSize: 14,
+                               border: validationErrors.codeSnippet ? '1px solid #ef4444' : '1px solid #d1d5db',
+                               borderRadius: '0.375rem',
+                               minHeight: '120px'
+                             }}
+                             placeholder="Enter the code snippet for the question..."
+                             aria-describedby={validationErrors.codeSnippet ? "codeSnippet-error" : undefined}
+                           />
+                           {validationErrors.codeSnippet && (
+                             <p id="codeSnippet-error" className="mt-1 text-sm text-red-600 flex items-center">
+                               <AlertCircle className="h-4 w-4 mr-1" />
+                               {validationErrors.codeSnippet}
+                             </p>
+                           )}
+                         </div>
+                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700">Answer Options</label>
-                          <button
-                            type="button"
-                            onClick={addOption}
-                            className="btn btn-secondary text-xs"
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Option
-                          </button>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Answer Options *
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              onClick={addOption}
+                              className="btn btn-secondary text-xs flex items-center"
+                              disabled={formData.options.length >= 6}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Option
+                            </button>
+                            <span className="text-xs text-gray-500">
+                              {formData.options.filter(o => o.trim()).length}/6 options
+                            </span>
+                          </div>
                         </div>
-                        <div className="space-y-2">
+                        {validationErrors.codeOptions && (
+                          <p className="mb-2 text-sm text-red-600 flex items-center">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            {validationErrors.codeOptions}
+                          </p>
+                        )}
+                        <div className="space-y-3">
                           {formData.options.map((option, index) => (
-                            <div key={index} className="flex items-center space-x-2">
-                              <span className="text-sm font-medium text-gray-600 w-6">
+                            <div key={index} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
+                              <span className="text-sm font-medium text-gray-600 w-6 mt-2">
                                 {String.fromCharCode(65 + index)}.
                               </span>
-                              <Editor
-                                value={option}
-                                onValueChange={(code) => updateOption(index, code)}
-                                highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.codeLanguage))}
-                                padding={10}
-                                style={{
-                                  fontFamily: '"Inconsolata", "Monaco", monospace',
-                                  fontSize: 12,
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '0.375rem',
-                                  minHeight: '60px',
-                                  flex: 1
-                                }}
-                                placeholder={`Code option ${String.fromCharCode(65 + index)}`}
-                              />
+                              <div className="flex-1">
+                                <Editor
+                                  value={option}
+                                  onValueChange={(code) => updateOption(index, code)}
+                                  highlight={(code) => Prism.highlight(code, getLanguageHighlight(formData.codeLanguage))}
+                                  padding={10}
+                                  style={{
+                                    fontFamily: '"Inconsolata", "Monaco", monospace',
+                                    fontSize: 12,
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '0.375rem',
+                                    minHeight: '60px',
+                                    width: '100%'
+                                  }}
+                                  placeholder={`Enter code option ${String.fromCharCode(65 + index)}`}
+                                />
+                              </div>
                               {formData.options.length > 2 && (
                                 <button
                                   type="button"
                                   onClick={() => removeOption(index)}
-                                  className="text-red-500 hover:text-red-700"
+                                  className="text-red-500 hover:text-red-700 p-1 mt-2"
+                                  aria-label={`Remove option ${String.fromCharCode(65 + index)}`}
                                 >
                                   <Minus className="h-4 w-4" />
                                 </button>
@@ -428,19 +529,31 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                         </label>
                         <select
                           value={formData.correctAnswer}
-                          onChange={(e) => setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))}
-                          className="input w-full"
+                          onChange={(e) => {
+                            setFormData(prev => ({ ...prev, correctAnswer: e.target.value }))
+                            if (validationErrors.correctAnswer) {
+                              setValidationErrors(prev => ({ ...prev, correctAnswer: undefined }))
+                            }
+                          }}
+                          className={`input w-full ${validationErrors.correctAnswer ? 'border-red-500 focus:border-red-500' : ''}`}
                           required
+                          aria-describedby={validationErrors.correctAnswer ? "correctAnswer-error" : undefined}
                         >
-                          <option value="">Select correct option</option>
+                          <option value="">Select the correct code option</option>
                           {formData.options.map((option, index) => (
                             option.trim() && (
                               <option key={index} value={option}>
-                                {String.fromCharCode(65 + index)}. {option.substring(0, 50)}...
+                                {String.fromCharCode(65 + index)}. {option.substring(0, 50)}{option.length > 50 ? '...' : ''}
                               </option>
                             )
                           ))}
                         </select>
+                        {validationErrors.correctAnswer && (
+                          <p id="correctAnswer-error" className="mt-1 text-sm text-red-600 flex items-center">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            {validationErrors.correctAnswer}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -616,13 +729,24 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Test Cases (Input/Output pairs) *
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Test Cases (Input/Output pairs) *
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            <HelpCircle className="h-4 w-4 text-gray-400" />
+                            <span className="text-xs text-gray-500">JSON format required</span>
+                          </div>
+                        </div>
                         <textarea
                           value={formData.testCases}
-                          onChange={(e) => setFormData(prev => ({ ...prev, testCases: e.target.value }))}
-                          className="input w-full h-48 font-mono text-sm resize-none"
+                          onChange={(e) => {
+                            setFormData(prev => ({ ...prev, testCases: e.target.value }))
+                            if (validationErrors.testCases) {
+                              setValidationErrors(prev => ({ ...prev, testCases: undefined }))
+                            }
+                          }}
+                          className={`input w-full h-48 font-mono text-sm resize-none ${validationErrors.testCases ? 'border-red-500 focus:border-red-500' : ''}`}
                           placeholder={`[
  {
    "input": "2 3",
@@ -635,7 +759,19 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
    "description": "Add larger numbers"
  }
 ]`}
+                          aria-describedby={validationErrors.testCases ? "testCases-error" : undefined}
                         />
+                        {validationErrors.testCases && (
+                          <p id="testCases-error" className="mt-1 text-sm text-red-600 flex items-center">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            {validationErrors.testCases}
+                          </p>
+                        )}
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>💡 Tip:</strong> Each test case should have <code>input</code>, <code>expectedOutput</code>, and optional <code>description</code> fields.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -781,7 +917,7 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
                             setFormData(prev => ({ ...prev, imageUrl: data.imageUrl }));
                           } catch (error) {
                             console.error('Upload failed:', error);
-                            alert('Failed to upload image');
+                            toast.error('Failed to upload image');
                           }
                         }
                       }}
@@ -1012,17 +1148,75 @@ const QuestionForm = ({ question = null, onSave, onCancel }) => {
             </div>
           )}
 
+          {/* Preview Section */}
+          {showPreview && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Eye className="h-5 w-5 mr-2" />
+                  Question Preview
+                </h3>
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                      {formData.questionType.toUpperCase()}
+                    </span>
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${
+                      formData.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                      formData.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {formData.difficulty.toUpperCase()}
+                    </span>
+                    <span className="text-sm text-gray-600">{formData.marks} points</span>
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-900 mb-4">
+                    {formData.questionText || 'Your question will appear here...'}
+                  </h4>
+                  {formData.questionType === 'code' && formData.codeSnippet && (
+                    <div className="bg-gray-100 p-3 rounded font-mono text-sm mb-4">
+                      {formData.codeSnippet.substring(0, 200)}...
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-500">
+                    Time limit: {formData.timeLimit}s • {formData.options.filter(o => o.trim()).length} options
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex space-x-4 pt-6 border-t border-gray-200">
+            {validationErrors.submit && (
+              <div className="flex-1 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 text-sm flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  {validationErrors.submit}
+                </p>
+              </div>
+            )}
             <button
               type="submit"
-              className="btn btn-primary flex-1 py-3 text-lg font-semibold shadow-lg hover:shadow-xl"
+              disabled={isSubmitting}
+              className="btn btn-primary flex-1 py-3 text-lg font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              {question ? 'Update Question' : 'Add Question'}
+              {isSubmitting ? (
+                <>
+                  <Loader className="h-5 w-5 mr-2 animate-spin" />
+                  {question ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  {question ? 'Update Question' : 'Create Question'}
+                </>
+              )}
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="btn btn-secondary flex-1 py-3 text-lg font-semibold hover:bg-gray-100"
+              disabled={isSubmitting}
+              className="btn btn-secondary flex-1 py-3 text-lg font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

@@ -80,16 +80,25 @@ export function setupSocketHandlers(io) {
 
         const { type, timestamp } = data;
 
+        // Validate input data
+        if (!type || typeof type !== 'string') {
+          console.error('Invalid cheat detection data:', data);
+          return;
+        }
+
         // Fetch participant details for penalty calculation
         const participant = await db.getAsync(
           'SELECT * FROM participants WHERE id = ?',
           [socket.participantId]
         );
 
-        if (!participant) return;
+        if (!participant) {
+          console.error('Participant not found for cheat detection:', socket.participantId);
+          return;
+        }
 
         // Calculate new warning count and determine penalty
-        const newWarningCount = participant.cheat_warnings + 1;
+        const newWarningCount = (participant.cheat_warnings || 0) + 1;
         let penaltyScore = 0;
         let status = 'active';
 
@@ -113,6 +122,10 @@ export function setupSocketHandlers(io) {
           });
         }
 
+        // Ensure penalty doesn't make score negative
+        const currentScore = participant.total_score || 0;
+        const finalPenalty = Math.min(penaltyScore, currentScore);
+
         // Apply penalty and update participant status
         await db.runAsync(
           `UPDATE participants SET
@@ -120,20 +133,21 @@ export function setupSocketHandlers(io) {
            total_score = total_score - ?,
            status = ?
            WHERE id = ?`,
-          [newWarningCount, penaltyScore, status, socket.participantId]
+          [newWarningCount, finalPenalty, status, socket.participantId]
         );
 
         // Notify the participant of their penalty
         socket.emit('cheatPenalty', {
           warningCount: newWarningCount,
-          penalty: penaltyScore,
+          penalty: finalPenalty,
           message: getCheatMessage(newWarningCount)
         });
 
-        console.log(`Cheat detected for participant ${participant.name}: ${type}`);
+        console.log(`Cheat detected for participant ${participant.name}: ${type}, warnings: ${newWarningCount}`);
 
       } catch (error) {
         console.error('Cheat detection error:', error);
+        socket.emit('error', { message: 'Failed to process cheat detection' });
       }
     });
 
@@ -313,15 +327,25 @@ export function setupSocketHandlers(io) {
     });
 
     // Handle disconnection
-    socket.on('disconnect', () => {
-      console.log('User disconnected:', socket.id);
-      
+    socket.on('disconnect', (reason) => {
+      console.log('User disconnected:', socket.id, 'Reason:', reason);
+
       // Update participant socket status
       if (socket.participantId) {
         db.runAsync(
           'UPDATE participants SET socket_id = NULL WHERE id = ?',
           [socket.participantId]
-        ).catch(console.error);
+        ).catch(error => {
+          console.error('Error updating participant socket status:', error);
+        });
+
+        // Notify organizer about disconnection if game is active
+        if (socket.gameId) {
+          io.to(`organizer-${socket.gameId}`).emit('participantDisconnected', {
+            participantId: socket.participantId,
+            reason: reason
+          });
+        }
       }
     });
   });

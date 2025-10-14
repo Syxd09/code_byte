@@ -16,6 +16,18 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Code,
+  Play,
+  Zap,
+  BookOpen,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  Loader,
+  Sparkles,
+  Settings,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Editor from "react-simple-code-editor";
 import Prism from "prismjs";
@@ -54,6 +66,10 @@ const GameInterface = () => {
   const [networkError, setNetworkError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [prismLoaded, setPrismLoaded] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
+  const [codeHints, setCodeHints] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTestPreview, setShowTestPreview] = useState(false);
 
   useEffect(() => {
     initializeGame();
@@ -541,8 +557,9 @@ const GameInterface = () => {
 
   const submitAnswer = useCallback(
     async (isAutoSubmit = false) => {
-      if (submitted || !currentQuestion) return;
+      if (submitted || !currentQuestion || isSubmitting) return;
 
+      setIsSubmitting(true);
       try {
         const sessionToken = localStorage.getItem("hackarena_session");
         const timeTaken = currentQuestion.time_limit - timeLeft;
@@ -552,6 +569,7 @@ const GameInterface = () => {
           const validation = validateCodeSubmission(answer, selectedLanguage);
           if (!validation.valid) {
             toast.error(validation.error);
+            setIsSubmitting(false);
             return;
           }
         }
@@ -566,10 +584,6 @@ const GameInterface = () => {
         };
 
         console.log("Submitting answer with payload:", payload);
-        console.log("Session token present:", !!sessionToken);
-        console.log("Current question:", currentQuestion);
-        console.log("Time left on frontend:", timeLeft);
-        console.log("Time taken calculated:", timeTaken);
 
         const response = await api.post("/participants/answer", payload, {
           headers: { "x-session-token": sessionToken },
@@ -581,14 +595,17 @@ const GameInterface = () => {
         setAnswerResult(response.data);
 
         if (response.data.isCorrect) {
-          toast.success(`Correct! +${response.data.scoreEarned} points`);
+          toast.success(`🎉 Correct! +${response.data.scoreEarned} points`, {
+            duration: 4000,
+            icon: '🎯'
+          });
         } else {
-          toast.error("Incorrect answer");
+          toast.error("❌ Incorrect answer", {
+            duration: 3000
+          });
         }
       } catch (error) {
         console.error("Submit answer error:", error);
-        console.error("Error response:", error.response?.data);
-        console.error("Error status:", error.response?.status);
 
         // Handle time expired error specifically
         if (error.response?.data?.error === "Question time has expired") {
@@ -599,7 +616,8 @@ const GameInterface = () => {
             scoreEarned: 0,
             message: "Time expired - answer submitted automatically",
           });
-          toast.error("Time expired - answer submitted automatically");
+          toast.error("⏰ Time expired - answer submitted automatically");
+          setIsSubmitting(false);
           return;
         }
 
@@ -607,7 +625,7 @@ const GameInterface = () => {
         if (!navigator.onLine || error.code === "NETWORK_ERROR") {
           setNetworkError("Network error while submitting answer");
           toast.error(
-            "Network error - answer will be submitted when connection is restored"
+            "🌐 Network error - answer will be submitted when connection is restored"
           );
 
           // Store answer for retry when connection is restored
@@ -620,20 +638,23 @@ const GameInterface = () => {
             })
           );
 
+          setIsSubmitting(false);
           return;
         }
 
         // Handle other API errors
         if (error.response?.status >= 500) {
-          toast.error("Server error - please try again");
+          toast.error("🔧 Server error - please try again");
         } else if (error.response?.status === 400) {
-          toast.error("Invalid answer format");
+          toast.error("📝 Invalid answer format");
         } else {
-          toast.error("Failed to submit answer");
+          toast.error("❌ Failed to submit answer");
         }
+      } finally {
+        setIsSubmitting(false);
       }
     },
-    [submitted, currentQuestion, answer, hintUsed, timeLeft]
+    [submitted, currentQuestion, answer, hintUsed, timeLeft, isSubmitting]
   );
 
   const autoSubmit = () => {
@@ -698,14 +719,17 @@ const GameInterface = () => {
     const templates = {
       javascript: `function solution() {
     // Write your JavaScript code here
+    // Example: return the sum of two numbers
     console.log("Hello, World!");
 }`,
       python: `def solution():
     # Write your Python code here
+    # Example: return the sum of two numbers
     print("Hello, World!")`,
       java: `public class Solution {
     public static void main(String[] args) {
         // Write your Java code here
+        // Example: print the sum of two numbers
         System.out.println("Hello, World!");
     }
 }`,
@@ -714,11 +738,42 @@ using namespace std;
 
 int main() {
     // Write your C++ code here
+    // Example: print the sum of two numbers
     cout << "Hello, World!" << endl;
     return 0;
 }`
     };
     return templates[language] || templates.javascript;
+  };
+
+  const getCodeHints = (language) => {
+    const hints = {
+      javascript: [
+        "Use console.log() to output results",
+        "Remember to handle edge cases",
+        "Consider time complexity for large inputs",
+        "Use meaningful variable names"
+      ],
+      python: [
+        "Use print() to output results",
+        "Python is 0-indexed",
+        "Consider using list comprehensions",
+        "Handle input parsing carefully"
+      ],
+      java: [
+        "Use System.out.println() to output",
+        "Remember to import necessary classes",
+        "Handle exceptions with try-catch",
+        "Use appropriate data types"
+      ],
+      cpp: [
+        "Use cout to output results",
+        "Include necessary headers",
+        "Be careful with memory management",
+        "Consider algorithm complexity"
+      ]
+    };
+    return hints[language] || hints.javascript;
   };
 
   const getLanguageHighlight = (lang = "javascript") => {
@@ -872,21 +927,29 @@ int main() {
         // Language selection dropdown for code questions
         const languageSelector = (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Programming Language:
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Programming Language:
+              </label>
+              <div className="flex items-center space-x-2">
+                <BookOpen className="h-4 w-4 text-gray-400" />
+                <span className="text-xs text-gray-500">Choose your preferred language</span>
+              </div>
+            </div>
             <select
               value={selectedLanguage}
               onChange={(e) => {
                 const newLang = e.target.value;
                 setSelectedLanguage(newLang);
+                setCodeHints(getCodeHints(newLang));
                 // Load template if answer is empty
                 if (!answer.trim()) {
                   setAnswer(loadCodeTemplate(newLang));
                 }
               }}
               disabled={submitted}
-              className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-sm"
+              className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+              aria-label="Select programming language"
             >
               {getLanguageOptions().map((lang) => (
                 <option key={lang.value} value={lang.value}>
@@ -894,6 +957,14 @@ int main() {
                 </option>
               ))}
             </select>
+            {!answer.trim() && !submitted && (
+              <button
+                onClick={() => setAnswer(loadCodeTemplate(selectedLanguage))}
+                className="ml-3 btn btn-secondary text-sm"
+              >
+                Load Template
+              </button>
+            )}
           </div>
         );
 
@@ -1235,10 +1306,17 @@ int main() {
               <label className="block text-base font-medium text-gray-700 mb-3">
                 Code Solution ({selectedLanguage}):
               </label>
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <Editor
                   value={answer}
                   onValueChange={(code) => setAnswer(code)}
+                  onKeyDown={(e) => {
+                    // Ctrl+Enter to submit
+                    if (e.ctrlKey && e.key === 'Enter' && !submitted && answer.trim()) {
+                      e.preventDefault();
+                      submitAnswer();
+                    }
+                  }}
                   highlight={(code) =>
                     safeHighlight(code, getLanguageHighlight(selectedLanguage))
                   }
@@ -1253,14 +1331,29 @@ int main() {
                     width: "100%",
                   }}
                   placeholder={placeholder}
+                  aria-label="Code editor"
                 />
+                <div className="absolute bottom-2 right-2 text-xs text-gray-400 bg-white px-2 py-1 rounded border">
+                  Ctrl+Enter to submit
+                </div>
               </div>
-              {evaluationMode === "textarea" && (
-                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-                  💡 AI will evaluate your code for semantic correctness, not just
-                  exact matching.
-                </p>
-              )}
+              <div className="flex items-center justify-between mt-2">
+                {evaluationMode === "textarea" && (
+                  <p className="text-sm text-blue-600 flex items-center">
+                    <Sparkles className="h-4 w-4 mr-1" />
+                    AI will evaluate semantic correctness
+                  </p>
+                )}
+                {evaluationMode === "compiler" && (
+                  <p className="text-sm text-green-600 flex items-center">
+                    <Play className="h-4 w-4 mr-1" />
+                    Code will be tested against multiple cases
+                  </p>
+                )}
+                <div className="text-xs text-gray-500">
+                  {answer.length} characters
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1673,14 +1766,25 @@ int main() {
           {currentQuestion && (
             <div className="card p-4 sm:p-6 mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
-                <h2 className="text-base sm:text-sm font-medium text-gray-600">
-                  Question {currentQuestion.question_order}
-                </h2>
+                <div className="flex items-center space-x-3">
+                  <h2 className="text-base sm:text-sm font-medium text-gray-600">
+                    Question {currentQuestion.question_order}
+                  </h2>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    currentQuestion.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                    currentQuestion.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {currentQuestion.difficulty?.toUpperCase() || 'MEDIUM'}
+                  </span>
+                </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm flex items-center">
+                    <Code className="h-3 w-3 mr-1" />
                     {currentQuestion.question_type.toUpperCase()}
                   </span>
-                  <span className="font-medium">
+                  <span className="font-medium flex items-center">
+                    <Target className="h-4 w-4 mr-1" />
                     {currentQuestion.marks} points
                   </span>
                 </div>
@@ -1689,6 +1793,45 @@ int main() {
               <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 leading-relaxed">
                 {currentQuestion.question_text}
               </h3>
+
+              {/* Instructions Panel */}
+              {currentQuestion.question_type === 'code' && showInstructions && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <HelpCircle className="h-5 w-5 text-blue-600" />
+                      <h4 className="font-medium text-blue-900">Quick Tips</h4>
+                    </div>
+                    <button
+                      onClick={() => setShowInstructions(false)}
+                      className="text-blue-600 hover:text-blue-800"
+                      aria-label="Hide instructions"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-blue-800">
+                    {getCodeHints(selectedLanguage).map((hint, index) => (
+                      <div key={index} className="flex items-start space-x-2">
+                        <span className="text-blue-600 mt-1">•</span>
+                        <span>{hint}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentQuestion.question_type === 'code' && !showInstructions && (
+                <div className="mb-4">
+                  <button
+                    onClick={() => setShowInstructions(true)}
+                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                    Show coding tips
+                  </button>
+                </div>
+              )}
 
               {/* Display image for image-based questions */}
               {currentQuestion.question_type === "image" &&
@@ -1703,7 +1846,104 @@ int main() {
                 )}
 
               {/* Answer Input */}
-              <div className="mb-4 sm:mb-6">{renderQuestionInput()}</div>
+              <div className="mb-4 sm:mb-6">
+                {renderQuestionInput()}
+
+                {/* Test Case Preview for Compiler Mode */}
+                {currentQuestion.question_type === 'code' &&
+                 currentQuestion.evaluation_mode === 'compiler' &&
+                 currentQuestion.test_cases && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-700 flex items-center">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Test Cases Preview
+                      </h4>
+                      <button
+                        onClick={() => setShowTestPreview(!showTestPreview)}
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                      >
+                        {showTestPreview ? (
+                          <>
+                            <EyeOff className="h-4 w-4 mr-1" />
+                            Hide
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-4 w-4 mr-1" />
+                            Show ({(() => {
+                              try {
+                                return JSON.parse(currentQuestion.test_cases).length;
+                              } catch {
+                                return 0;
+                              }
+                            })()} tests)
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {showTestPreview && (
+                      <div className="bg-gray-50 border rounded-lg p-4 max-h-48 overflow-y-auto">
+                        <div className="space-y-3">
+                          {(() => {
+                            try {
+                              const testCases = JSON.parse(currentQuestion.test_cases);
+                              return testCases.slice(0, 3).map((testCase, index) => (
+                                <div key={index} className="border rounded p-3 bg-white">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="font-medium text-sm text-gray-700">
+                                      Test Case {index + 1}
+                                    </span>
+                                    {testCase.description && (
+                                      <span className="text-xs text-gray-500">
+                                        {testCase.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                      <span className="font-medium text-gray-600">Input:</span>
+                                      <code className="block bg-gray-100 p-2 rounded mt-1 text-xs font-mono">
+                                        {testCase.input || "No input"}
+                                      </code>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-600">Expected:</span>
+                                      <code className="block bg-green-50 p-2 rounded mt-1 text-xs font-mono border border-green-200">
+                                        {testCase.expected_output || "No expected output"}
+                                      </code>
+                                    </div>
+                                  </div>
+                                </div>
+                              ));
+                            } catch (error) {
+                              return (
+                                <p className="text-sm text-gray-500">
+                                  Test cases format is invalid.
+                                </p>
+                              );
+                            }
+                          })()}
+                          {(() => {
+                            try {
+                              const testCases = JSON.parse(currentQuestion.test_cases);
+                              if (testCases.length > 3) {
+                                return (
+                                  <p className="text-sm text-gray-500 text-center">
+                                    ... and {testCases.length - 3} more test cases
+                                  </p>
+                                );
+                              }
+                            } catch {}
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Hint */}
               {currentQuestion.hint && (
@@ -1741,78 +1981,142 @@ int main() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                 <div className="text-sm text-gray-600 text-center sm:text-left">
                   {submitted ? (
-                    <span className="flex items-center justify-center sm:justify-start text-green-600">
+                    <span className="flex items-center justify-center sm:justify-start text-green-600 font-medium">
                       <CheckCircle className="h-5 w-5 mr-1" />
-                      Answer submitted
+                      Answer submitted successfully
                     </span>
                   ) : (
-                    <span className="text-center sm:text-left">
-                      {currentQuestion?.time_decay_enabled
-                        ? "Answer quickly for exponential time bonus!"
-                        : "Answer quickly for more points!"}
-                    </span>
+                    <div className="text-center sm:text-left">
+                      <div className="flex items-center justify-center sm:justify-start space-x-4 text-sm">
+                        <span className={`flex items-center ${
+                          currentQuestion?.time_decay_enabled ? 'text-orange-600' : 'text-blue-600'
+                        }`}>
+                          {currentQuestion?.time_decay_enabled ? (
+                            <>
+                              <Zap className="h-4 w-4 mr-1" />
+                              Time bonus available!
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="h-4 w-4 mr-1" />
+                              Answer quickly for bonus points
+                            </>
+                          )}
+                        </span>
+                        {currentQuestion?.question_type === 'code' && (
+                          <span className="text-gray-500">
+                            Press Ctrl+Enter to submit
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 <button
                   onClick={() => submitAnswer()}
-                  disabled={submitted || !answer.trim()}
-                  className="btn btn-primary flex items-center justify-center w-full sm:w-auto min-h-[44px] px-6 py-3 text-base font-medium"
+                  disabled={submitted || !answer.trim() || isSubmitting}
+                  className="btn btn-primary flex items-center justify-center w-full sm:w-auto min-h-[44px] px-6 py-3 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Send className="h-5 w-5 mr-2" />
-                  {submitted ? "Submitted" : "Submit Answer"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader className="h-5 w-5 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : submitted ? (
+                    <>
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      Submitted
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-5 w-5 mr-2" />
+                      Submit Answer
+                    </>
+                  )}
                 </button>
               </div>
 
               {/* Answer Result */}
               {answerResult && (
                 <div
-                  className={`mt-4 p-4 rounded-lg ${
+                  className={`mt-6 p-6 rounded-lg border-2 ${
                     answerResult.isCorrect
-                      ? "bg-green-50 border border-green-200"
-                      : "bg-red-50 border border-red-200"
+                      ? "bg-green-50 border-green-200"
+                      : "bg-red-50 border-red-200"
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                    <div className="flex items-center space-x-2">
-                      {answerResult.isCorrect ? (
-                        <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
-                      ) : (
-                        <XCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
-                      )}
-                      <span
-                        className={`font-medium text-base ${
-                          answerResult.isCorrect
-                            ? "text-green-800"
-                            : "text-red-800"
-                        }`}
-                      >
-                        {answerResult.message}
-                      </span>
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-full ${
+                        answerResult.isCorrect ? 'bg-green-100' : 'bg-red-100'
+                      }`}>
+                        {answerResult.isCorrect ? (
+                          <CheckCircle className="h-8 w-8 text-green-600" />
+                        ) : (
+                          <XCircle className="h-8 w-8 text-red-600" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-lg ${
+                          answerResult.isCorrect ? "text-green-800" : "text-red-800"
+                        }`}>
+                          {answerResult.isCorrect ? "Correct Answer!" : "Incorrect Answer"}
+                        </h4>
+                        <p className={`text-sm ${
+                          answerResult.isCorrect ? "text-green-700" : "text-red-700"
+                        }`}>
+                          {answerResult.message}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-sm">
+
+                    <div className="flex flex-wrap gap-3">
                       {answerResult.isCorrect && (
-                        <span className="text-green-600 font-medium">
-                          +{answerResult.scoreEarned} points
-                          {answerResult.timeBonus > 0 && (
-                            <span className="text-blue-500 ml-1">
-                              (+{answerResult.timeBonus} time bonus)
-                            </span>
-                          )}
-                          {answerResult.partialScore > 0 && (
-                            <span className="text-orange-500 ml-1">
-                              (+{answerResult.partialScore} partial)
-                            </span>
-                          )}
-                        </span>
+                        <div className="flex items-center space-x-2 bg-green-100 px-3 py-2 rounded-lg">
+                          <Target className="h-4 w-4 text-green-600" />
+                          <span className="text-green-800 font-medium">
+                            +{answerResult.scoreEarned} points earned
+                          </span>
+                        </div>
                       )}
-                      {!answerResult.isCorrect &&
-                        answerResult.partialScore > 0 && (
-                          <span className="text-orange-600 font-medium">
+
+                      {answerResult.timeBonus > 0 && (
+                        <div className="flex items-center space-x-2 bg-blue-100 px-3 py-2 rounded-lg">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="text-blue-800 font-medium">
+                            +{answerResult.timeBonus} time bonus
+                          </span>
+                        </div>
+                      )}
+
+                      {answerResult.partialScore > 0 && (
+                        <div className="flex items-center space-x-2 bg-orange-100 px-3 py-2 rounded-lg">
+                          <AlertTriangle className="h-4 w-4 text-orange-600" />
+                          <span className="text-orange-800 font-medium">
                             +{answerResult.partialScore} partial points
                           </span>
-                        )}
+                        </div>
+                      )}
+
+                      {!answerResult.isCorrect && answerResult.partialScore === 0 && (
+                        <div className="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg">
+                          <XCircle className="h-4 w-4 text-gray-600" />
+                          <span className="text-gray-800 font-medium">
+                            0 points earned
+                          </span>
+                        </div>
+                      )}
                     </div>
+
+                    {hintUsed && (
+                      <div className="flex items-center space-x-2 text-orange-700 bg-orange-50 px-3 py-2 rounded-lg">
+                        <Lightbulb className="h-4 w-4" />
+                        <span className="text-sm">
+                          Hint was used (-{currentQuestion?.hint_penalty || 10} points penalty)
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1882,3 +2186,4 @@ int main() {
 };
 
 export default GameInterface;
+

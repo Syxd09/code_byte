@@ -179,8 +179,8 @@ describe('AnalyticsCharts Component', () => {
     expect(screen.getByText('Mid Game')).toBeInTheDocument();
     expect(screen.getByText('Late Game')).toBeInTheDocument();
 
-    // Check performance metrics
-    expect(screen.getByText('Accuracy:')).toBeInTheDocument();
+    // Check performance metrics - use getAllByText for multiple elements
+    expect(screen.getAllByText('Accuracy:')).toHaveLength(3);
     expect(screen.getByText('80%')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(screen.getByText('70%')).toBeInTheDocument();
@@ -229,7 +229,7 @@ describe('AnalyticsCharts Component', () => {
   it('displays participant qualification status in table', () => {
     render(<AnalyticsCharts data={mockParticipantData} type="participants" />);
 
-    expect(screen.getByText('Yes')).toBeInTheDocument();
+    expect(screen.getAllByText('Yes')).toHaveLength(2);
     expect(screen.getByText('No')).toBeInTheDocument();
   });
 
@@ -254,8 +254,8 @@ describe('AnalyticsCharts Component', () => {
 
     render(<AnalyticsCharts data={largeParticipantData} type="participants" />);
 
-    // Should show top 10 performers
-    expect(screen.getByText('Participant 1')).toBeInTheDocument();
+    // Should show top 10 performers - use getAllByText for multiple Participant 1
+    expect(screen.getAllByText('Participant 1')).toHaveLength(2);
     expect(screen.getByText('Participant 10')).toBeInTheDocument();
     expect(screen.queryByText('Participant 11')).not.toBeInTheDocument();
   });

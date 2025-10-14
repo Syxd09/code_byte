@@ -17,7 +17,7 @@ describe('QuestionForm Component', () => {
   it('renders form with default values', () => {
     render(<QuestionForm onSave={mockOnSave} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText('Add New Question')).toBeInTheDocument();
+    expect(screen.getByText('Add New DSBA Question')).toBeInTheDocument();
     expect(screen.getByText('Basic Info')).toBeInTheDocument();
     expect(screen.getByText('Question Content')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('QuestionForm Component', () => {
       />
     );
 
-    expect(screen.getByText('Edit Question')).toBeInTheDocument();
+    expect(screen.getByText('Edit DSBA Question')).toBeInTheDocument();
     expect(screen.getByDisplayValue('What is 2+2?')).toBeInTheDocument();
     expect(screen.getByDisplayValue('easy')).toBeInTheDocument();
   });

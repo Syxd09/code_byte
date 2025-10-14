@@ -21,6 +21,8 @@ import Home from './pages/Home'
 
 // Components
 import LoadingSpinner from './components/LoadingSpinner'
+import ToastManager from './components/ToastManager'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
   const { user, loading } = useAuth()
@@ -30,37 +32,40 @@ function App() {
   }
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
-      <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
-      
-      {/* Participant Routes */}
-      <Route path="/join/:gameCode?" element={<JoinGame />} />
-      <Route path="/game/:gameCode" element={<GameInterface />} />
-      <Route path="/analytics" element={<PostGameAnalytics />} />
-      
-      {/* Public Leaderboard */}
-      <Route path="/leaderboard/:gameCode" element={<PublicLeaderboard />} />
-      
-      {/* Protected Organizer Routes */}
-      <Route 
-        path="/dashboard" 
-        element={user ? <Dashboard /> : <Navigate to="/login" />} 
-      />
-      <Route
-        path="/game-control/:gameId"
-        element={user ? <GameControl /> : <Navigate to="/login" />}
-      />
-      <Route
-        path="/game-analytics/:gameId"
-        element={user ? <GameAnalytics /> : <Navigate to="/login" />}
-      />
-      
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <ErrorBoundary>
+      <ToastManager />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+        <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
+
+        {/* Participant Routes */}
+        <Route path="/join/:gameCode?" element={<JoinGame />} />
+        <Route path="/game/:gameCode" element={<GameInterface />} />
+        <Route path="/analytics" element={<PostGameAnalytics />} />
+
+        {/* Public Leaderboard */}
+        <Route path="/leaderboard/:gameCode" element={<PublicLeaderboard />} />
+
+        {/* Protected Organizer Routes */}
+        <Route
+          path="/dashboard"
+          element={user ? <Dashboard /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/game-control/:gameId"
+          element={user ? <GameControl /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/game-analytics/:gameId"
+          element={user ? <GameAnalytics /> : <Navigate to="/login" />}
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </ErrorBoundary>
   )
 }
 

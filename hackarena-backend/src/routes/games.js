@@ -223,6 +223,48 @@ router.post('/:gameId/questions', authenticateToken, async (req, res) => {
       crosswordSize
     } = req.body;
 
+    // Validate required fields
+    if (!questionText || !questionType) {
+      return res.status(400).json({ error: 'Question text and type are required' });
+    }
+
+    // Validate question type specific requirements
+    if (questionType === 'mcq' && (!options || !Array.isArray(options) || options.length < 2)) {
+      return res.status(400).json({ error: 'MCQ questions must have at least 2 options' });
+    }
+
+    if (questionType === 'code' && !evaluationMode) {
+      return res.status(400).json({ error: 'Code questions must specify evaluation mode' });
+    }
+
+    // Validate test cases for code questions
+    if (questionType === 'code' && (evaluationMode === 'compiler' || evaluationMode === 'bugfix')) {
+      try {
+        const parsedTestCases = testCases ? JSON.parse(testCases) : null;
+        if (!Array.isArray(parsedTestCases) || parsedTestCases.length === 0) {
+          return res.status(400).json({ error: 'Code questions with compiler/bugfix evaluation must have test cases' });
+        }
+
+        // Validate test case structure
+        for (const testCase of parsedTestCases) {
+          if (!testCase.hasOwnProperty('input') || !testCase.hasOwnProperty('expectedOutput')) {
+            return res.status(400).json({ error: 'Test cases must have input and expectedOutput fields' });
+          }
+        }
+      } catch (parseError) {
+        return res.status(400).json({ error: 'Invalid test cases format' });
+      }
+    }
+
+    // Validate marks and time limits
+    if (marks && (marks < 0 || marks > 100)) {
+      return res.status(400).json({ error: 'Marks must be between 0 and 100' });
+    }
+
+    if (timeLimit && (timeLimit < 10 || timeLimit > 3600)) {
+      return res.status(400).json({ error: 'Time limit must be between 10 and 3600 seconds' });
+    }
+
     // Get current question count
     const questionCount = await db.getAsync(
       'SELECT COUNT(*) as count FROM questions WHERE game_id = ?',
@@ -236,7 +278,7 @@ router.post('/:gameId/questions', authenticateToken, async (req, res) => {
          questionCount.count + 1,
          questionText,
          questionType,
-         JSON.stringify(options),
+         JSON.stringify(options || []),
          correctAnswer,
          hint,
          hintPenalty || 10,

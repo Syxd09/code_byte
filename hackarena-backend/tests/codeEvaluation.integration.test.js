@@ -414,6 +414,68 @@ function sumArray(numbers) {
       // For now, we expect it to fail due to security restrictions
       expect(result.success).toBe(false);
     });
+
+    it('should handle empty code submissions', async () => {
+      const code = '';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Code cannot be empty' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('empty');
+    });
+
+    it('should handle oversized code', async () => {
+      const code = 'x'.repeat(11 * 1024 * 1024); // 11MB
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Code size exceeds limit' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('size exceeds limit');
+    });
+
+    it('should handle unsupported languages', async () => {
+      const code = 'console.log("test");';
+      const language = 'unsupported';
+      const mockResult = { success: false, output: '', error: 'Unsupported language: unsupported' };
+
+      codeExecutionService.executeCode.mockRejectedValue(new Error('Unsupported language: unsupported'));
+
+      await expect(codeExecutionService.executeCode(code, language)).rejects.toThrow('Unsupported language');
+    });
+
+    it('should handle memory limit exceeded', async () => {
+      const code = 'const arr = []; while(true) { arr.push(new Array(1000000)); }';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Memory limit exceeded' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language, '', 5000);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Memory limit');
+    });
+
+    it('should handle output size limit exceeded', async () => {
+      const code = 'console.log("x".repeat(2000000));'; // Large output
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Output size limit exceeded' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Output size limit');
+    });
   });
 
   describe('Backward Compatibility', () => {

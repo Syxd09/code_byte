@@ -1,20 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Trophy, Users, QrCode, ArrowRight, Loader2 } from 'lucide-react'
+import { Trophy, Users, QrCode, ArrowRight, Loader2, HelpCircle } from 'lucide-react'
 import { api } from '../../utils/api'
 import Header from '../../components/Header'
 import Footer from '../../components/Footer'
-import toast from 'react-hot-toast'
+import { AccessibleField } from '../../hooks/useAccessibility'
+import { LoadingButton } from '../../components/ProgressIndicator'
+import { HelpTooltip } from '../../components/Tooltip'
+import { useFormShortcuts } from '../../hooks/useKeyboardShortcuts'
 
 const JoinGame = () => {
   const { gameCode: urlGameCode } = useParams()
   const navigate = useNavigate()
-  
+
   const [formData, setFormData] = useState({
     gameCode: urlGameCode || '',
     name: ''
   })
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+
+  // Keyboard shortcuts for form
+  useFormShortcuts({
+    submit: () => document.querySelector('form')?.requestSubmit()
+  })
 
   useEffect(() => {
     // If game code is in URL, focus on name input
@@ -23,25 +32,38 @@ const JoinGame = () => {
     }
   }, [urlGameCode])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
+  const validateForm = () => {
+    const newErrors = {}
+
     if (!formData.gameCode.trim()) {
-      toast.error('Game code is required')
-      return
-    }
-    
-    if (!formData.name.trim()) {
-      toast.error('Your name is required')
-      return
+      newErrors.gameCode = 'Game code is required to join a game'
+    } else if (formData.gameCode.length !== 8) {
+      newErrors.gameCode = 'Game code must be exactly 8 characters'
+    } else if (!/^[A-Z0-9]+$/.test(formData.gameCode.toUpperCase())) {
+      newErrors.gameCode = 'Game code can only contain letters and numbers'
     }
 
-    if (formData.name.length < 2) {
-      toast.error('Name must be at least 2 characters')
+    if (!formData.name.trim()) {
+      newErrors.name = 'Your name is required to participate'
+    } else if (formData.name.length < 2) {
+      newErrors.name = 'Name must be at least 2 characters long'
+    } else if (formData.name.length > 30) {
+      newErrors.name = 'Name cannot exceed 30 characters'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!validateForm()) {
       return
     }
 
     setLoading(true)
+    setErrors({})
 
     try {
       const response = await api.post('/participants/join', {
@@ -55,12 +77,33 @@ const JoinGame = () => {
       localStorage.setItem('hackarena_session', sessionToken)
       localStorage.setItem('hackarena_participant', JSON.stringify(participant))
 
-      toast.success(`Welcome ${participant.name}! ${participant.avatar}`)
+      // Enhanced success message
+      if (window.showSuccessToast) {
+        window.showSuccessToast(`Welcome ${participant.name}! 🎮 Get ready to compete!`)
+      }
+
       navigate(`/game/${gameCode}`)
 
     } catch (error) {
       console.error('Join game error:', error)
-      toast.error(error.response?.data?.error || 'Failed to join game')
+
+      let errorMessage = 'Unable to join the game. Please try again.'
+
+      if (error.response?.status === 404) {
+        errorMessage = 'Game not found. Please check the game code and try again.'
+      } else if (error.response?.status === 409) {
+        errorMessage = 'This name is already taken in this game. Please choose a different name.'
+      } else if (error.response?.status === 403) {
+        errorMessage = 'This game is full or no longer accepting participants.'
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      }
+
+      setErrors({ general: errorMessage })
+
+      if (window.showErrorToast) {
+        window.showErrorToast(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
@@ -90,16 +133,25 @@ const JoinGame = () => {
 
         {/* Join Form */}
         <div className="card p-10 shadow-2xl bg-white/95 backdrop-blur-sm border-0">
+          {errors.general && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm font-medium">{errors.general}</p>
+            </div>
+          )}
+
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Join Game</h2>
             <p className="text-gray-600">Enter your details to participate</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="gameCode" className="block text-sm font-medium text-gray-700 mb-2">
-                Game Code
-              </label>
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <AccessibleField
+              label="Game Code"
+              id="gameCode"
+              error={errors.gameCode}
+              required
+              helpText="Enter the 8-character code shown on the organizer's screen or scan the QR code"
+            >
               <div className="relative">
                 <input
                   id="gameCode"
@@ -107,22 +159,30 @@ const JoinGame = () => {
                   type="text"
                   value={formData.gameCode}
                   onChange={handleChange}
-                  className="input w-full text-center text-lg font-mono tracking-wider uppercase"
+                  className={`input w-full text-center text-lg font-mono tracking-wider uppercase ${errors.gameCode ? 'border-red-300 focus:border-red-500' : ''}`}
                   placeholder="ENTER CODE"
                   maxLength={8}
                   required
+                  aria-describedby={errors.gameCode ? "gameCode-error" : "gameCode-help"}
                 />
                 <QrCode className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <HelpTooltip content="Find the game code on the organizer's screen or scan their QR code">
+                    <button type="button" className="text-gray-400 hover:text-gray-600 ml-2">
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </HelpTooltip>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Scan QR code or enter the 8-digit game code
-              </p>
-            </div>
+            </AccessibleField>
 
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Your Name
-              </label>
+            <AccessibleField
+              label="Your Name"
+              id="name"
+              error={errors.name}
+              required
+              helpText="Choose a unique name that will be visible to all participants and on the leaderboard"
+            >
               <div className="relative">
                 <input
                   id="name"
@@ -130,33 +190,32 @@ const JoinGame = () => {
                   type="text"
                   value={formData.name}
                   onChange={handleChange}
-                  className="input w-full"
+                  className={`input w-full ${errors.name ? 'border-red-300 focus:border-red-500' : ''}`}
                   placeholder="Enter your name"
                   maxLength={30}
                   required
+                  aria-describedby={errors.name ? "name-error" : "name-help"}
                 />
                 <Users className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                This name will be visible to everyone
-              </p>
-            </div>
+            </AccessibleField>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary w-full h-14 text-xl font-bold flex items-center justify-center shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all"
+            <LoadingButton
+              loading={loading}
+              loadingText="Joining game..."
+              onClick={handleSubmit}
+              className="w-full h-14 text-xl font-bold flex items-center justify-center shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all"
             >
-              {loading ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-              ) : (
-                <>
-                  Join Game
-                  <ArrowRight className="h-6 w-6 ml-3" />
-                </>
-              )}
-            </button>
+              Join Game
+              <ArrowRight className="h-6 w-6 ml-3" />
+            </LoadingButton>
           </form>
+
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-500">
+              Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Enter</kbd> or <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to join quickly
+            </p>
+          </div>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 mb-2">

@@ -8,12 +8,20 @@ import {
   Zap,
   ArrowRight,
   Play,
-  UserPlus
+  UserPlus,
+  Smartphone,
+  Eye,
+  CheckCircle
 } from 'lucide-react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
+import BreadcrumbNavigation from '../components/BreadcrumbNavigation'
+import { useCommonShortcuts } from '../hooks/useKeyboardShortcuts'
 
 const Home = () => {
+  // Enable keyboard shortcuts
+  useCommonShortcuts()
+
   const features = [
     {
       icon: <Trophy className="h-8 w-8" />,
@@ -44,11 +52,22 @@ const Home = () => {
       icon: <Zap className="h-8 w-8" />,
       title: "Multiple Question Types",
       description: "MCQ, Code snippets, Fill-in-blanks, and more"
+    },
+    {
+      icon: <Smartphone className="h-8 w-8" />,
+      title: "Mobile Optimized",
+      description: "Fully responsive design that works perfectly on all devices"
+    },
+    {
+      icon: <Eye className="h-8 w-8" />,
+      title: "Accessibility First",
+      description: "Screen reader support, keyboard navigation, and WCAG compliance"
     }
   ]
 
   return (
     <div className="min-h-screen bg-white">
+      <BreadcrumbNavigation />
       <Header />
 
       {/* Hero Section */}
@@ -68,14 +87,22 @@ const Home = () => {
             and support for 500+ concurrent participants. Perfect for college fests and tech events.
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <Link to="/register" className="btn bg-white text-dsba-navy hover:bg-gray-100 text-lg px-10 py-4 shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all">
+            <Link to="/register" className="btn bg-white text-dsba-navy hover:bg-gray-100 text-lg px-10 py-4 shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all focus:ring-4 focus:ring-white/30">
               <UserPlus className="h-6 w-6 mr-3" />
               Create Account
+              <span className="sr-only">Create organizer account to host hackathon games</span>
             </Link>
-            <Link to="/join" className="btn bg-transparent border-2 border-white text-white hover:bg-white hover:text-dsba-navy text-lg px-10 py-4 shadow-xl hover:shadow-white/25 transform hover:scale-105 transition-all">
+            <Link to="/join" className="btn bg-transparent border-2 border-white text-white hover:bg-white hover:text-dsba-navy text-lg px-10 py-4 shadow-xl hover:shadow-white/25 transform hover:scale-105 transition-all focus:ring-4 focus:ring-white/30">
               <Play className="h-6 w-6 mr-3" />
               Join Game
+              <span className="sr-only">Join an existing hackathon game as a participant</span>
             </Link>
+          </div>
+
+          <div className="mt-6 text-center">
+            <p className="text-blue-100 text-sm">
+              ⌨️ <strong>Keyboard shortcuts:</strong> Press <kbd className="px-1 py-0.5 bg-white/20 rounded text-xs">G+H</kbd> for Home, <kbd className="px-1 py-0.5 bg-white/20 rounded text-xs">G+J</kbd> to Join Game, <kbd className="px-1 py-0.5 bg-white/20 rounded text-xs">?</kbd> for help
+            </p>
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent"></div>
@@ -94,18 +121,24 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature, index) => (
-              <div key={index} className="card p-8 hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-dsba-navy">
-                <div className="text-dsba-navy mb-6 p-3 bg-blue-50 rounded-xl w-fit">
+              <div key={index} className="card p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-dsba-navy group">
+                <div className="text-dsba-navy mb-4 p-2 bg-blue-50 rounded-lg w-fit group-hover:bg-dsba-navy group-hover:text-white transition-colors">
                   {feature.icon}
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-gray-600 text-lg leading-relaxed">
+                <p className="text-gray-600 text-base leading-relaxed">
                   {feature.description}
                 </p>
+                {index >= 6 && (
+                  <div className="mt-3">
+                    <CheckCircle className="h-4 w-4 text-green-500 inline mr-1" />
+                    <span className="text-xs text-green-600 font-medium">New Feature</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

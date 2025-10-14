@@ -8,11 +8,13 @@ const __dirname = path.dirname(__filename);
 
 // Security and resource limits
 const EXECUTION_LIMITS = {
-  timeout: 10000, // 10 seconds
-  memoryLimit: 128 * 1024 * 1024, // 128MB
-  maxOutputSize: 1024 * 1024, // 1MB
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  allowedLanguages: ['javascript', 'python', 'java', 'cpp']
+  timeout: 5000, // Reduced to 5 seconds for better DoS protection
+  memoryLimit: 64 * 1024 * 1024, // Reduced to 64MB for better resource control
+  maxOutputSize: 512 * 1024, // Reduced to 512KB to prevent output flooding
+  maxFileSize: 5 * 1024 * 1024, // Reduced to 5MB for code size limits
+  allowedLanguages: ['javascript', 'python', 'java', 'cpp'],
+  maxConcurrentExecutions: 10, // Limit concurrent code executions
+  rateLimitPerMinute: 30 // Max executions per user per minute
 };
 
 // Sandbox directory for code execution
@@ -187,9 +189,19 @@ class LanguageRunner {
     const filePath = path.join(SANDBOX_DIR, `code_${executionId}${this.config.extension}`);
 
     try {
+      // Validate inputs
+      if (!code || code.trim().length === 0) {
+        throw new Error('Code cannot be empty');
+      }
+
       // Validate code size
       if (code.length > EXECUTION_LIMITS.maxFileSize) {
         throw new Error('Code size exceeds limit');
+      }
+
+      // Basic security checks
+      if (this.containsDangerousPatterns(code)) {
+        throw new Error('Code contains potentially dangerous patterns');
       }
 
       // Wrap code with language-specific wrapper
@@ -230,6 +242,125 @@ class LanguageRunner {
     }
   }
 
+  containsDangerousPatterns(code) {
+    const dangerousPatterns = [
+      // Node.js dangerous operations
+      /require\s*\(\s*['"`]child_process['"`]\s*\)/i,
+      /require\s*\(\s*['"`]fs['"`]\s*\)/i,
+      /require\s*\(\s*['"`]http['"`]\s*\)/i,
+      /require\s*\(\s*['"`]https['"`]\s*\)/i,
+      /require\s*\(\s*['"`]net['"`]\s*\)/i,
+      /require\s*\(\s*['"`]cluster['"`]\s*\)/i,
+      /require\s*\(\s*['"`]worker_threads['"`]\s*\)/i,
+      /require\s*\(\s*['"`]vm['"`]\s*\)/i,
+      /process\.exit/i,
+      /process\.kill/i,
+      /process\.abort/i,
+      /exec\s*\(/i,
+      /spawn\s*\(/i,
+      /fork\s*\(/i,
+      /execSync\s*\(/i,
+      /spawnSync\s*\(/i,
+      /eval\s*\(/i,
+      /Function\s*\(/i,
+      /setTimeout\s*\(\s*['"`]\s*rm\s+/i,
+      /setInterval\s*\(\s*['"`]\s*rm\s+/i,
+      /global\s*\[/i,
+      /global\./i,
+      /process\.env/i,
+      /process\.argv/i,
+      /__dirname/i,
+      /__filename/i,
+
+      // Python dangerous operations
+      /import\s+os/i,
+      /import\s+subprocess/i,
+      /import\s+sys/i,
+      /import\s+socket/i,
+      /import\s+urllib/i,
+      /import\s+requests/i,
+      /import\s+threading/i,
+      /import\s+multiprocessing/i,
+      /os\.system/i,
+      /os\.popen/i,
+      /os\.exec/i,
+      /subprocess\./i,
+      /sys\.exit/i,
+      /eval\s*\(/i,
+      /exec\s*\(/i,
+      /open\s*\(\s*['"`]\/etc\//i,
+      /open\s*\(\s*['"`]\/proc\//i,
+      /open\s*\(\s*['"`]\/home\//i,
+      /open\s*\(\s*['"`]\/root\//i,
+      /__import__/i,
+      /globals\s*\(\)/i,
+      /locals\s*\(\)/i,
+
+      // Java dangerous operations
+      /Runtime\.getRuntime/i,
+      /ProcessBuilder/i,
+      /System\.exit/i,
+      /File\s*\(/i,
+      /\bnew\s+File\b/i,
+      /FileInputStream/i,
+      /FileOutputStream/i,
+      /Socket/i,
+      /ServerSocket/i,
+      /URL/i,
+      /URLConnection/i,
+
+      // C++ dangerous operations
+      /system\s*\(/i,
+      /popen\s*\(/i,
+      /exec/i,
+      /fork\s*\(/i,
+      /socket/i,
+      /connect/i,
+      /fopen/i,
+      /freopen/i,
+      /remove\s*\(/i,
+      /unlink/i,
+
+      // General dangerous patterns
+      /rm\s+/i,
+      /del\s+/i,
+      /format\s+/i,
+      /shutdown/i,
+      /reboot/i,
+      /halt/i,
+      /poweroff/i,
+      /kill/i,
+      /pkill/i,
+      /killall/i,
+      /chmod/i,
+      /chown/i,
+      /sudo/i,
+      /su\s+/i,
+      /passwd/i,
+      /shadow/i,
+      /wget/i,
+      /curl/i,
+      /nc\s+/i,
+      /netcat/i,
+      /telnet/i,
+      /ssh/i,
+      /scp/i,
+      /ftp/i,
+      /tftp/i,
+      /mysql/i,
+      /psql/i,
+      /sqlite/i,
+      /redis/i,
+      /mongodb/i,
+      /docker/i,
+      /kubectl/i,
+      /terraform/i,
+      /ansible/i
+    ];
+
+    return dangerousPatterns.some(pattern => pattern.test(code));
+  }
+
   wrapCode(code, testInput) {
     return this.config.wrapper ? this.config.wrapper(code, testInput) : code;
   }
@@ -239,11 +370,16 @@ class LanguageRunner {
       let output = '';
       let error = '';
       let timeoutId;
+      let childProcess = null;
 
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId);
-        if (process && !process.killed) {
-          process.kill('SIGKILL');
+        if (childProcess && !childProcess.killed) {
+          try {
+            childProcess.kill('SIGKILL');
+          } catch (killError) {
+            console.error('Error killing process:', killError);
+          }
         }
       };
 
@@ -294,7 +430,7 @@ class LanguageRunner {
         }
 
         function runProcess() {
-          const process = spawn(command, args, {
+          childProcess = spawn(command, args, {
             cwd: SANDBOX_DIR,
             stdio: ['pipe', 'pipe', 'pipe'],
             env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=128' }
@@ -302,11 +438,11 @@ class LanguageRunner {
 
           // Send input if provided
           if (testInput) {
-            process.stdin.write(testInput);
-            process.stdin.end();
+            childProcess.stdin.write(testInput);
+            childProcess.stdin.end();
           }
 
-          process.stdout.on('data', (data) => {
+          childProcess.stdout.on('data', (data) => {
             output += data.toString();
             if (output.length > EXECUTION_LIMITS.maxOutputSize) {
               cleanup();
@@ -314,11 +450,11 @@ class LanguageRunner {
             }
           });
 
-          process.stderr.on('data', (data) => {
+          childProcess.stderr.on('data', (data) => {
             error += data.toString();
           });
 
-          process.on('close', (code) => {
+          childProcess.on('close', (code) => {
             clearTimeout(timeoutId);
             monitor.update();
             resolve({
@@ -328,7 +464,7 @@ class LanguageRunner {
             });
           });
 
-          process.on('error', (err) => {
+          childProcess.on('error', (err) => {
             clearTimeout(timeoutId);
             reject(new Error(`Execution error: ${err.message}`));
           });
@@ -489,8 +625,13 @@ class SemanticAnalyzer {
   }
 
   static calculateSimilarity(code1, code2) {
+    if (!code1 || !code2) return 0;
+
     const words1 = code1.toLowerCase().split(/\W+/).filter(w => w.length > 2);
     const words2 = code2.toLowerCase().split(/\W+/).filter(w => w.length > 2);
+
+    if (words1.length === 0 && words2.length === 0) return 10; // Both empty, perfect match
+    if (words1.length === 0 || words2.length === 0) return 0; // One empty, no match
 
     const set1 = new Set(words1);
     const set2 = new Set(words2);
@@ -530,7 +671,7 @@ class SemanticAnalyzer {
 
 // Bug fix validation system
 class BugFixValidator {
-  static validateFix(originalCode, fixedCode, testCases) {
+  static async validateFix(originalCode, fixedCode, testCases, userId = null) {
     const validation = {
       fixesApplied: false,
       testsPass: false,
@@ -542,13 +683,13 @@ class BugFixValidator {
       // Parse test cases
       const tests = JSON.parse(testCases);
 
-      // Run tests on both versions
+      // Run tests on both versions with rate limiting
       const originalResults = [];
       const fixedResults = [];
 
       for (const test of tests) {
-        const originalResult = this.runTest(originalCode, test.input, test.language);
-        const fixedResult = this.runTest(fixedCode, test.input, test.language);
+        const originalResult = await this.runTest(originalCode, test.input, test.language, userId);
+        const fixedResult = await this.runTest(fixedCode, test.input, test.language, userId);
 
         originalResults.push(originalResult);
         fixedResults.push(fixedResult);
@@ -569,14 +710,23 @@ class BugFixValidator {
     return validation;
   }
 
-  static runTest(code, input, language) {
-    // This would integrate with the LanguageRunner
-    // For now, return mock results
-    return {
-      success: Math.random() > 0.5,
-      output: 'test output',
-      error: Math.random() > 0.7 ? 'error' : ''
-    };
+  static async runTest(code, input, language, userId = null) {
+    try {
+      // Use the actual CodeExecutionService for real execution with rate limiting
+      const service = new CodeExecutionService();
+      const result = await service.executeCode(code, language, input, 5000, userId); // 5 second timeout for tests
+      return {
+        success: result.success,
+        output: result.output,
+        error: result.error
+      };
+    } catch (error) {
+      return {
+        success: false,
+        output: '',
+        error: error.message
+      };
+    }
   }
 
   static detectFixes(originalResults, fixedResults) {
@@ -608,21 +758,31 @@ class PartialScorer {
     let totalScore = 0;
     const maxScore = 10; // Base score for code questions
 
-    switch (evaluationMode) {
-      case 'semantic':
-        totalScore = this.semanticScoring(userCode, correctCode, language);
-        break;
-      case 'compiler':
-        totalScore = this.compilerScoring(testResults, userCode, correctCode);
-        break;
-      case 'bugfix':
-        totalScore = this.bugFixScoring(userCode, correctCode, testResults);
-        break;
-      default:
-        totalScore = this.defaultScoring(userCode, correctCode);
-    }
+    try {
+      switch (evaluationMode) {
+        case 'semantic':
+          totalScore = this.semanticScoring(userCode, correctCode, language);
+          break;
+        case 'compiler':
+          totalScore = this.compilerScoring(testResults, userCode, correctCode);
+          break;
+        case 'bugfix':
+          totalScore = this.bugFixScoring(userCode, correctCode, testResults);
+          break;
+        default:
+          totalScore = this.defaultScoring(userCode, correctCode);
+      }
 
-    return Math.min(totalScore, maxScore);
+      // Ensure score is within valid range
+      if (isNaN(totalScore) || !isFinite(totalScore)) {
+        totalScore = 0;
+      }
+
+      return Math.max(0, Math.min(totalScore, maxScore));
+    } catch (error) {
+      console.error('Error calculating score:', error);
+      return 0;
+    }
   }
 
   static semanticScoring(userCode, correctCode, language) {
@@ -634,19 +794,21 @@ class PartialScorer {
     score += analysis.keywordScore * 0.3;
     score += analysis.similarityScore * 0.8;
 
-    return score;
+    // Ensure score doesn't exceed maximum
+    return Math.min(score, 10);
   }
 
   static compilerScoring(testResults, userCode, correctCode) {
     if (!testResults || !Array.isArray(testResults)) return 0;
 
-    const passedTests = testResults.filter(result => result.success).length;
+    const passedTests = testResults.filter(result => result && result.success).length;
     const totalTests = testResults.length;
     const passRate = totalTests > 0 ? passedTests / totalTests : 0;
 
     // Bonus for code quality
     const qualityBonus = this.assessCodeQuality(userCode, correctCode);
 
+    // Enhanced scoring: base score from pass rate + quality bonus
     return (passRate * 8) + qualityBonus;
   }
 
@@ -658,7 +820,8 @@ class PartialScorer {
     if (validation.testsPass) score += 5;
     score += validation.improvementScore;
 
-    return score;
+    // Ensure score doesn't exceed maximum
+    return Math.min(score, 10);
   }
 
   static defaultScoring(userCode, correctCode) {
@@ -686,14 +849,93 @@ class PartialScorer {
   }
 }
 
+// Rate limiting and concurrency control
+class RateLimiter {
+  constructor() {
+    this.requests = new Map(); // userId -> { count, resetTime }
+  }
+
+  isAllowed(userId) {
+    const now = Date.now();
+    const userRequests = this.requests.get(userId);
+
+    if (!userRequests || now > userRequests.resetTime) {
+      // Reset or initialize
+      this.requests.set(userId, {
+        count: 1,
+        resetTime: now + 60000 // 1 minute
+      });
+      return true;
+    }
+
+    if (userRequests.count >= EXECUTION_LIMITS.rateLimitPerMinute) {
+      return false;
+    }
+
+    userRequests.count++;
+    return true;
+  }
+
+  cleanup() {
+    const now = Date.now();
+    for (const [userId, data] of this.requests.entries()) {
+      if (now > data.resetTime) {
+        this.requests.delete(userId);
+      }
+    }
+  }
+}
+
+// Concurrency control
+class ConcurrencyController {
+  constructor(maxConcurrent = EXECUTION_LIMITS.maxConcurrentExecutions) {
+    this.maxConcurrent = maxConcurrent;
+    this.running = 0;
+    this.queue = [];
+  }
+
+  async execute(fn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.running >= this.maxConcurrent || this.queue.length === 0) {
+      return;
+    }
+
+    this.running++;
+    const { fn, resolve, reject } = this.queue.shift();
+
+    try {
+      const result = await fn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.running--;
+      this.processQueue();
+    }
+  }
+}
+
 // Main code execution service
 export class CodeExecutionService {
   constructor() {
     this.runners = new Map();
     this.monitor = new ResourceMonitor();
+    this.rateLimiter = new RateLimiter();
+    this.concurrencyController = new ConcurrencyController();
   }
 
-  async executeCode(code, language, testInput = '', timeLimit = null) {
+  async executeCode(code, language, testInput = '', timeLimit = null, userId = null) {
+    // Rate limiting check
+    if (userId && !this.rateLimiter.isAllowed(userId)) {
+      throw new Error('Rate limit exceeded. Please wait before submitting more code.');
+    }
+
     if (!EXECUTION_LIMITS.allowedLanguages.includes(language)) {
       throw new Error(`Unsupported language: ${language}`);
     }
@@ -703,9 +945,14 @@ export class CodeExecutionService {
     }
 
     const runner = this.runners.get(language);
-    const result = await runner.execute(code, testInput, timeLimit || EXECUTION_LIMITS.timeout);
+
+    // Use concurrency controller for execution
+    const result = await this.concurrencyController.execute(async () => {
+      return await runner.execute(code, testInput, timeLimit || EXECUTION_LIMITS.timeout);
+    });
 
     this.monitor.update();
+    this.rateLimiter.cleanup(); // Periodic cleanup of rate limit data
     return result;
   }
 
@@ -726,12 +973,12 @@ export class CodeExecutionService {
   }
 
   // Batch execution for multiple test cases
-  async executeTestCases(code, language, testCases) {
+  async executeTestCases(code, language, testCases, userId = null) {
     const results = [];
 
     for (const testCase of testCases) {
       try {
-        const result = await this.executeCode(code, language, testCase.input, testCase.timeLimit);
+        const result = await this.executeCode(code, language, testCase.input, testCase.timeLimit, userId);
         results.push({
           input: testCase.input,
           expectedOutput: testCase.expectedOutput,

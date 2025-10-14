@@ -55,11 +55,17 @@ function calculatePartialScore(userAnswer, correctAnswer, questionType, partialS
 const router = express.Router();
 
 // Code evaluation functions
-async function evaluateCodeSemantic(userCode, correctCode, aiSettings, language = 'javascript') {
+async function evaluateCodeSemantic(userCode, correctCode, aiSettings, language = 'javascript', userId = null) {
   // Enhanced semantic checking using the new CodeExecutionService
   if (!userCode || !correctCode) return false;
 
   try {
+    // Rate limiting check for semantic analysis
+    if (userId && !CodeExecutionService.rateLimiter.isAllowed(userId)) {
+      console.warn('Rate limit exceeded for semantic analysis, user:', userId);
+      return false;
+    }
+
     // Use the semantic analyzer from CodeExecutionService
     const analysis = CodeExecutionService.analyzeCode(userCode, language, correctCode);
 
@@ -95,7 +101,7 @@ async function evaluateCodeSemantic(userCode, correctCode, aiSettings, language 
   }
 }
 
-async function evaluateCodeWithTestCases(userCode, testCasesJson, correctCode, language = 'javascript') {
+async function evaluateCodeWithTestCases(userCode, testCasesJson, correctCode, language = 'javascript', userId = null) {
   // Enhanced test case validation using the new CodeExecutionService
   if (!userCode || !testCasesJson) return false;
 
@@ -103,8 +109,8 @@ async function evaluateCodeWithTestCases(userCode, testCasesJson, correctCode, l
     const testCases = JSON.parse(testCasesJson);
     if (!Array.isArray(testCases) || testCases.length === 0) return false;
 
-    // Execute code against all test cases
-    const testResults = await CodeExecutionService.executeTestCases(userCode, language, testCases);
+    // Execute code against all test cases with rate limiting
+    const testResults = await CodeExecutionService.executeTestCases(userCode, language, testCases, userId);
 
     // Calculate success rate
     const passedTests = testResults.filter(result => result.success).length;
@@ -467,16 +473,20 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
           correctnessScore = isCorrect ? 10 : 0;
         } else if (evaluationMode === 'semantic') {
           // AI-based semantic validation with detailed analysis
-          isCorrect = await evaluateCodeSemantic(answer, question.correct_answer, question.ai_validation_settings, language);
+          isCorrect = await evaluateCodeSemantic(answer, question.correct_answer, question.ai_validation_settings, language, participant.id);
           const analysis = CodeExecutionService.analyzeCode(answer, language, question.correct_answer);
 
           correctnessScore = (analysis.structureScore + analysis.keywordScore + analysis.similarityScore) / 3;
           codeQualityScore = analysis.complexityScore;
           performanceScore = 0; // Not applicable for semantic evaluation
           isCorrect = correctnessScore >= 6; // Pass threshold
+
+          // Ensure scores don't exceed maximum
+          correctnessScore = Math.min(correctnessScore, 10);
+          codeQualityScore = Math.min(codeQualityScore, 10);
         } else if (evaluationMode === 'compiler') {
           // Test case validation with detailed metrics
-          const testResults = await CodeExecutionService.executeTestCases(answer, language, JSON.parse(question.test_cases || '[]'));
+          const testResults = await CodeExecutionService.executeTestCases(answer, language, JSON.parse(question.test_cases || '[]'), participant.id);
           executionResults = JSON.stringify(testResults);
 
           testCasesPassed = testResults.filter(r => r.success).length;
@@ -491,10 +501,15 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
           performanceScore = Math.max(0, 10 - (executionTimeMs / 1000)); // Penalize slow execution
           codeQualityScore = CodeExecutionService.calculatePartialScore(answer, question.correct_answer, testResults, language, evaluationMode);
 
+          // Ensure scores don't exceed maximum
+          correctnessScore = Math.min(correctnessScore, 10);
+          performanceScore = Math.min(performanceScore, 10);
+          codeQualityScore = Math.min(codeQualityScore, 10);
+
           isCorrect = passRate >= 0.8; // 80% pass rate required
         } else if (evaluationMode === 'bugfix') {
           // Bug fix validation with detailed analysis
-          const validation = CodeExecutionService.validateBugFix(question.buggy_code || '', answer, question.test_cases || '[]');
+          const validation = await CodeExecutionService.validateBugFix(question.correct_answer || '', answer, question.test_cases || '[]', participant.id);
           executionResults = JSON.stringify(validation);
 
           correctnessScore = (validation.fixesApplied ? 5 : 0) + (validation.testsPass ? 5 : 0);
@@ -540,6 +555,8 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
         partialScore = calculatePartialScore(answer, question.correct_answer, question.question_type, question.partial_marking_settings);
       }
       scoreEarned = partialScore;
+      // Ensure partial score doesn't exceed question marks
+      scoreEarned = Math.min(scoreEarned, question.marks);
     }
 
     // Apply time decay bonus if enabled
@@ -547,10 +564,10 @@ router.post('/answer', authenticateParticipant, async (req, res) => {
       const decayBonus = calculateTimeDecayBonus(timeTaken, question.time_limit, question.time_decay_factor);
       timeBonus = Math.floor(scoreEarned * decayBonus);
       scoreEarned += timeBonus;
-    } else if (isCorrect) {
+    } else if (isCorrect && question.time_limit > 0) {
       // Legacy time-based bonus for backward compatibility
-      const legacyTimeBonus = Math.max(0, (question.time_limit - timeTaken) / question.time_limit * 5);
-      timeBonus = Math.floor(legacyTimeBonus);
+      const timeRatio = Math.max(0, (question.time_limit - timeTaken) / question.time_limit);
+      timeBonus = Math.floor(timeRatio * 5); // Max 5 points bonus
       scoreEarned += timeBonus;
     }
 

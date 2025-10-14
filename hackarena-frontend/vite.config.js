@@ -6,10 +6,24 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: ['says-points-cemetery-beef.trycloudflare.com']
+    allowedHosts: ['tony-modeling-sussex-harley.trycloudflare.com'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   build: {
     outDir: 'dist',
     sourcemap: false
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        '.js': 'jsx'
+      }
+    }
   }
 })

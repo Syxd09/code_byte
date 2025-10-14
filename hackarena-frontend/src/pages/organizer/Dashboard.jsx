@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -14,11 +15,14 @@ import {
   Edit,
   Trash2,
   TrendingUp,
-  Download
+  Download,
+  HelpCircle
 } from 'lucide-react'
 import { api } from '../../utils/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import toast from 'react-hot-toast'
+import { PageLoader } from '../../components/ProgressIndicator'
+import { HelpTooltip } from '../../components/Tooltip'
+import { useCommonShortcuts } from '../../hooks/useKeyboardShortcuts'
 import Header from '../../components/Header'
 
 const Dashboard = () => {
@@ -32,9 +36,12 @@ const Dashboard = () => {
     qualificationType: 'none',
     qualificationThreshold: 0
   })
-  
+
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+
+  // Enable common keyboard shortcuts
+  useCommonShortcuts()
 
   useEffect(() => {
     fetchGames()
@@ -128,7 +135,7 @@ const Dashboard = () => {
   }
 
   if (loading) {
-    return <LoadingSpinner message="Loading dashboard..." />
+    return <PageLoader message="Loading your games..." />
   }
 
   return (
@@ -195,10 +202,16 @@ const Dashboard = () => {
 
         {/* Games Section */}
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Your Games</h2>
+          <div className="flex items-center space-x-3">
+            <h2 className="text-2xl font-bold text-gray-900">Your Games</h2>
+            <HelpTooltip content="Create and manage your hackathon games. Each game can have up to 500 participants with real-time scoring and analytics.">
+              <HelpCircle className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            </HelpTooltip>
+          </div>
           <button
             onClick={() => setShowCreateModal(true)}
             className="btn btn-primary flex items-center"
+            title="Create a new game (Ctrl+N)"
           >
             <Plus className="h-4 w-4 mr-2" />
             Create New Game
@@ -209,7 +222,7 @@ const Dashboard = () => {
           <div className="card p-12 text-center">
             <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No games yet</h3>
-            <p className="text-gray-600 mb-4">Create your first hackathon game to get started.</p>
+            <p className="text-gray-600 mb-4">Create your first hackathon game to get started. Games can support up to 500 participants with real-time scoring.</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="btn btn-primary"
@@ -217,6 +230,9 @@ const Dashboard = () => {
               <Plus className="h-4 w-4 mr-2" />
               Create First Game
             </button>
+            <div className="mt-4 text-sm text-gray-500">
+              <p>💡 Tip: Use keyboard shortcuts - Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">G+D</kbd> to go to Dashboard, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">?</kbd> for help</p>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

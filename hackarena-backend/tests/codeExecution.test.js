@@ -142,6 +142,58 @@ describe('Code Execution Service', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('size exceeds limit');
     });
+
+    it('should handle empty code', async () => {
+      const code = '';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Code cannot be empty' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('empty');
+    });
+
+    it('should handle dangerous code patterns', async () => {
+      const code = 'require("fs").writeFileSync("/etc/passwd", "hacked");';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Code contains potentially dangerous patterns' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('dangerous patterns');
+    });
+
+    it('should handle memory intensive operations', async () => {
+      const code = 'const bigArray = new Array(100000000).fill(0);';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Memory limit exceeded' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Memory limit');
+    });
+
+    it('should handle output size limits', async () => {
+      const code = 'console.log("x".repeat(2000000));';
+      const language = 'javascript';
+      const mockResult = { success: false, output: '', error: 'Output size limit exceeded' };
+
+      codeExecutionService.executeCode.mockResolvedValue(mockResult);
+
+      const result = await codeExecutionService.executeCode(code, language);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Output size limit');
+    });
   });
 
   describe('executeTestCases', () => {
