@@ -6,7 +6,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../database/init.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { io } from '../server.js';
+// Socket.IO is not available in serverless functions
+// Real-time features will need to be implemented differently
+// import { io } from '../server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -437,15 +439,10 @@ router.post('/:gameId/start', authenticateToken, async (req, res) => {
         [req.params.gameId, firstQuestion.id, questionEndTime]
       );
 
-      // Emit to all participants
-      console.log('📡 Emitting gameStarted event to room:', `game-${req.params.gameId}`);
-      io.to(`game-${req.params.gameId}`).emit('gameStarted', {
-        question: {
-          ...firstQuestion,
-          options: JSON.parse(firstQuestion.options || '[]')
-        }
-      });
-      console.log('✅ Game started event emitted successfully');
+      // Real-time features disabled in serverless environment
+      // TODO: Implement real-time features using WebSockets or polling
+      console.log('📡 Game started - real-time features disabled in serverless environment');
+      console.log('Game started for game:', req.params.gameId);
     } else {
       console.log('❌ No first question found for game:', req.params.gameId);
     }
@@ -499,13 +496,8 @@ router.post('/:gameId/next-question', authenticateToken, async (req, res) => {
       [nextQuestion.id, nextQuestionEndTime, req.params.gameId]
     );
 
-    // Emit to all participants
-    io.to(`game-${req.params.gameId}`).emit('nextQuestion', {
-      question: {
-        ...nextQuestion,
-        options: JSON.parse(nextQuestion.options || '[]')
-      }
-    });
+    // Real-time features disabled in serverless environment
+    console.log('Next question started for game:', req.params.gameId);
 
     res.json({ message: 'Next question started' });
   } catch (error) {
@@ -537,11 +529,8 @@ router.post('/:gameId/reveal-answer', authenticateToken, async (req, res) => {
     // Calculate and update leaderboard
     await updateLeaderboard(req.params.gameId);
 
-    // Emit answer reveal to all participants
-    io.to(`game-${req.params.gameId}`).emit('answerRevealed', {
-      correctAnswer: session.correct_answer,
-      explanation: session.explanation
-    });
+    // Real-time features disabled in serverless environment
+    console.log('Answer revealed for game:', req.params.gameId);
 
     res.json({ message: 'Answer revealed successfully' });
   } catch (error) {
@@ -564,8 +553,8 @@ router.post('/:gameId/end', authenticateToken, async (req, res) => {
     // Apply qualification rules
     await applyQualificationRules(req.params.gameId);
 
-    // Emit game end to all participants
-    io.to(`game-${req.params.gameId}`).emit('gameEnded');
+    // Real-time features disabled in serverless environment
+    console.log('Game ended for game:', req.params.gameId);
 
     res.json({ message: 'Game ended successfully' });
   } catch (error) {
@@ -598,8 +587,8 @@ router.post('/:gameId/pause', authenticateToken, async (req, res) => {
       [req.params.gameId]
     );
 
-    // Emit pause event to all participants
-    io.to(`game-${req.params.gameId}`).emit('gamePaused');
+    // Real-time features disabled in serverless environment
+    console.log('Game paused for game:', req.params.gameId);
 
     res.json({ message: 'Game paused successfully' });
   } catch (error) {
@@ -657,8 +646,8 @@ router.post('/:gameId/resume', authenticateToken, async (req, res) => {
       ['active', req.params.gameId]
     );
 
-    // Emit resume event to all participants
-    io.to(`game-${req.params.gameId}`).emit('gameResumed');
+    // Real-time features disabled in serverless environment
+    console.log('Game resumed for game:', req.params.gameId);
 
     res.json({ message: 'Game resumed successfully' });
   } catch (error) {
@@ -688,6 +677,78 @@ router.get('/:gameCode/leaderboard', async (req, res) => {
   } catch (error) {
     console.error('Get leaderboard error:', error);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+// Get current game state for polling (replaces real-time features in serverless environment)
+router.get('/:gameCode/state', async (req, res) => {
+  try {
+    const game = await db.getAsync('SELECT * FROM games WHERE game_code = ?', [req.params.gameCode]);
+
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    const state = {
+      gameId: game.id,
+      status: game.status,
+      currentQuestionIndex: game.current_question_index,
+      totalQuestions: game.total_questions,
+      startedAt: game.started_at,
+      endedAt: game.ended_at,
+      qualificationType: game.qualification_type,
+      qualificationThreshold: game.qualification_threshold
+    };
+
+    // Get current session if game is active
+    if (game.status === 'active') {
+      const session = await db.getAsync(
+        `SELECT gs.*, q.question_text, q.question_type, q.options, q.correct_answer,
+                q.hint, q.time_limit, q.marks, q.difficulty, q.explanation, q.image_url
+         FROM game_sessions gs
+         LEFT JOIN questions q ON gs.current_question_id = q.id
+         WHERE gs.game_id = ?`,
+        [game.id]
+      );
+
+      if (session) {
+        // Calculate time remaining
+        const now = new Date();
+        const endTime = new Date(session.question_ends_at);
+        const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000));
+
+        state.currentQuestion = {
+          id: session.current_question_id,
+          questionText: session.question_text,
+          questionType: session.question_type,
+          options: session.options ? JSON.parse(session.options) : [],
+          hint: session.hint,
+          timeLimit: session.time_limit,
+          marks: session.marks,
+          difficulty: session.difficulty,
+          explanation: session.explanation,
+          imageUrl: session.image_url,
+          timeRemaining,
+          answersRevealed: session.answers_revealed,
+          answeredParticipants: session.answered_participants
+        };
+      }
+    }
+
+    // Get leaderboard
+    const leaderboard = await db.allAsync(
+      `SELECT name, avatar, total_score, current_rank, status, qualified
+       FROM participants
+       WHERE game_id = ? AND status = 'active'
+       ORDER BY total_score DESC, joined_at ASC`,
+      [game.id]
+    );
+
+    state.leaderboard = leaderboard;
+
+    res.json(state);
+  } catch (error) {
+    console.error('Get game state error:', error);
+    res.status(500).json({ error: 'Failed to fetch game state' });
   }
 });
 
@@ -721,9 +782,9 @@ async function updateLeaderboard(gameId) {
     [gameId]
   );
 
-  // Emit real-time leaderboard update to all game participants
-  // This ensures all connected clients see the latest rankings instantly
-  io.to(`game-${gameId}`).emit('leaderboardUpdate', leaderboard);
+  // Real-time features disabled in serverless environment
+  // Leaderboard updates will need to be polled by clients
+  console.log('Leaderboard updated for game:', gameId);
 }
 
 // Helper function to apply qualification rules
